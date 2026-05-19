@@ -30,6 +30,19 @@ The phone talks only to the Pi. nginx forwards `/pedalboard/*`, `/effect/*`, `/s
 
 You do **not** need Node.js on the Pi if you build on your computer and copy the `dist/` folder.
 
+### Can it be built on the Pi?
+
+**Yes**, if Node.js 18+ and npm are installed. Standard Pi-Stomp images do **not** ship with Node — you install it once.
+
+| | Build on computer | Build on Pi |
+|---|-------------------|-------------|
+| **Speed** | Fast | Slower (compile on ARM) |
+| **Internet** | Only for `npm install` on PC | Required at least once for Node + npm |
+| **Hotspot-only** | Works (copy `dist/` via SCP/USB) | Hard — `npm install` usually needs WAN |
+| **Recommended** | ✅ Yes | Optional / tinkerers |
+
+If you only have the Pi and no PC, use [Build on the Pi](#build-on-the-pi-instead) below — connect the Pi to your home Wi‑Fi (not hotspot) for the one-time `npm install`, then switch back to hotspot for phone use.
+
 ---
 
 ## Step 1 — Get the project on your computer
@@ -58,7 +71,66 @@ This creates a `dist/` folder with the compiled site. The install script require
 
 ---
 
+## Build on the Pi instead
+
+Skip copying `dist/` from a PC — clone and build directly on the device.
+
+### 1. Install Node.js (one time, needs internet)
+
+SSH into the Pi on your **home network** (Ethernet or Wi‑Fi with internet — not the phone hotspot):
+
+```bash
+node -v   # if this prints v18+ or v20+, skip to step 2
+```
+
+**Debian / Raspberry Pi OS / Pi-Stomp (apt):**
+
+```bash
+sudo apt-get update
+sudo apt-get install -y nodejs npm
+node -v
+npm -v
+```
+
+If `node -v` is below 18, use [NodeSource](https://github.com/nodesource/distributions) or install `nvm`, then Node 20 LTS.
+
+### 2. Clone and build
+
+```bash
+cd ~
+git clone https://github.com/rosenauproductions/Pistomp-Mobile.git
+cd Pistomp-Mobile
+npm install
+npm run build
+```
+
+Build may take a few minutes on a Pi. Confirm `dist/index.html` exists.
+
+### 3. Install nginx site
+
+```bash
+sudo bash install-on-pistomp.sh
+```
+
+### 4. Phone
+
+Join the Pi-Stomp hotspot → **http://172.24.1.1:8080**
+
+Future updates on the Pi:
+
+```bash
+cd ~/Pistomp-Mobile
+git pull
+npm install
+npm run build
+sudo bash install-on-pistomp.sh
+```
+
+---
+
 ## Step 3 — Copy the project to the Pi
+
+*(Skip this section if you used [Build on the Pi instead](#build-on-the-pi-instead).)*
 
 Copy the **entire project folder** (or at minimum: `dist/`, `install-on-pistomp.sh`, and this guide).
 

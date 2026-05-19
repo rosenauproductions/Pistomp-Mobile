@@ -53,7 +53,9 @@ sudo bash install-on-pistomp.sh
 
 Leave the connection **Host** field empty in app settings (gear icon) so API calls use the nginx proxy.
 
-See [DEPLOYMENT.md](./DEPLOYMENT.md) for SCP/SFTP options, troubleshooting, updates, and uninstall.
+**Build on the Pi?** Yes — install Node 18+ on the Pi, `git clone`, `npm install`, `npm run build`, then run the install script. Easiest path is still build on a computer and copy `dist/` (hotspot has no internet for npm). Details in [DEPLOYMENT.md](./DEPLOYMENT.md).
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for SCP/SFTP options, build-on-Pi steps, troubleshooting, updates, and uninstall.
 
 ---
 
