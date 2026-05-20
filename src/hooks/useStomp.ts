@@ -195,9 +195,7 @@ export function useStomp() {
             p.instance === plugin.instance ? { ...p, bypassed: !next } : p,
           ),
         }));
-        setError(
-          "Bypass failed — WebSocket could not reach MOD (reload page; keep MOD Desktop running)",
-        );
+        setError("Bypass failed — could not reach MOD on the Pi (reload page; check :8080 proxy)");
       }
     }
   };
@@ -221,7 +219,7 @@ export function useStomp() {
     if (mode === "live") {
       const ok = await modui.setParameter(instance, port, value);
       if (!ok) {
-        setError("Parameter update failed — check WebSocket to MOD (reload; MOD Desktop running)");
+        setError("Parameter update failed — could not reach MOD on the Pi");
       }
     }
   };
@@ -261,7 +259,7 @@ export function useStomp() {
     if (mode === "live") {
       const ok = await modui.setParameter(ctrl.instance, ctrl.port, value);
       if (!ok) {
-        setError("Parameter update failed — check WebSocket to MOD (reload; MOD Desktop running)");
+        setError("Parameter update failed — could not reach MOD on the Pi");
       }
     }
   };

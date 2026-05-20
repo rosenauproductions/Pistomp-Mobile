@@ -492,19 +492,46 @@ async function setParameterViaHttp(
   return ok === true || ok === "true";
 }
 
-/** Pi-Stomp with real HMI can use HTTP when WebSocket is down; MOD Desktop cannot. */
-function httpParamFallbackEnabled(): boolean {
-  return isPiStompMode();
+/**
+ * Pi-Stomp MOD patch: direct host param_set / bypass (same as pi-stomp LCD/footswitches).
+ * @see pi-stomp/GUIDE.md — POST /effect/parameter/pi_stomp_set//graph{id}/{symbol}
+ */
+async function setParameterViaPiStomp(
+  instance: string,
+  port: string,
+  value: number,
+): Promise<boolean> {
+  const instPath = instance.startsWith("/") ? instance : `/${instance}`;
+  const path = `/effect/parameter/pi_stomp_set//graph${instPath}/${port}`;
+  const res = await fetch(apiUrl(path), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ value: value }),
+  });
+  if (!res.ok) return false;
+  const text = await res.text();
+  if (!text) return true;
+  try {
+    const ok = JSON.parse(text);
+    return ok === true || ok === "true";
+  } catch {
+    return text === "true" || text === "True";
+  }
 }
 
 export async function setBypass(instance: string, bypassed: boolean): Promise<boolean> {
   const value = bypassed ? 1 : 0;
+  if (isPiStompMode()) {
+    if (await setParameterViaPiStomp(instance, ":bypass", value)) return true;
+  }
   try {
     await sendWsParam(instance, ":bypass", value);
     return true;
   } catch {
-    if (!httpParamFallbackEnabled()) return false;
-    return setParameterViaHttp(instance, ":bypass", value);
+    if (!isModDesktopMode()) {
+      return setParameterViaHttp(instance, ":bypass", value);
+    }
+    return false;
   }
 }
 
@@ -513,12 +540,17 @@ export async function setParameter(
   port: string,
   value: number,
 ): Promise<boolean> {
+  if (isPiStompMode()) {
+    if (await setParameterViaPiStomp(instance, port, value)) return true;
+  }
   try {
     await sendWsParam(instance, port, value);
     return true;
   } catch {
-    if (!httpParamFallbackEnabled()) return false;
-    return setParameterViaHttp(instance, port, value);
+    if (!isModDesktopMode()) {
+      return setParameterViaHttp(instance, port, value);
+    }
+    return false;
   }
 }
 

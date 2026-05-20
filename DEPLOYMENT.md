@@ -428,6 +428,11 @@ Manual check on Pi: `grep -A3 'location.*reset' /etc/nginx/sites-available/pisto
 - nginx must proxy **`/websocket`** with `Host 127.0.0.1` (included in current `install-on-pistomp.sh`).
 - Hard-refresh the phone page after updating `dist/`.
 
+### Stomps or sliders do nothing (pedalboard change works)
+
+- Pi-Stomp uses MOD’s patched **`/effect/parameter/pi_stomp_set//graph/…`** API (not generic `/effect/parameter/set/`). Current Pistomp-Mobile builds call that on the device.
+- Redeploy **`dist/`** only (no nginx change needed for this fix).
+
 ### Changes on pistomp.local do not update :8080 immediately
 
 - The app listens on WebSocket `param_set` messages and polls every ~2.5s.

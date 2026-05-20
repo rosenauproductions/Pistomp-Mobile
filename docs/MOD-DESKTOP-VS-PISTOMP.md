@@ -10,7 +10,7 @@ Use **Settings → Runtime** (dev only) to switch modes. Production installs on 
 |--------|----------|
 | API | Same origin `:8080`; Host field **empty** |
 | Current pedalboard | `GET /pedalboard/current` when available |
-| Bypass / parameters | WebSocket `/websocket`; HTTP `/effect/parameter/set/` fallback if HMI is up |
+| Bypass / parameters | **`POST /effect/parameter/pi_stomp_set//graph/{instance}/{port}`** (pi-stomp patch); WebSocket for inbound sync |
 | Bypass in `/pedalboard/info/` | Treated as live enough for refresh |
 | `last.json` | **Not used** |
 | Direct `ws://127.0.0.1:18181` | **Not used** |
