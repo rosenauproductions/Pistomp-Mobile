@@ -70,7 +70,7 @@ export function SettingsSheet({
 
         <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--muted)" }}>
           Leave blank for same-origin (Pi install on :8080). Hotspot:{" "}
-          <code>http://172.24.1.1:8080</code>
+          <code>http://pistomp.local:8080</code>
         </p>
         <label>
           <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>Host URL</span>

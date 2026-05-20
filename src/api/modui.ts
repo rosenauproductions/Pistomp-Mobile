@@ -18,6 +18,7 @@ function normalizeWsInstance(raw: string): string {
   return s.startsWith("/graph/") ? s.slice("/graph/".length) : s;
 }
 
+/** MOD-UI WebSocket port path (pi-stomp bridge uses /graph/…). */
 function wsPortPath(instance: string, port: string): string {
   const base = instance.startsWith("/graph/") ? instance : `/graph/${instance}`;
   return `${base}/${port}`;
@@ -157,12 +158,15 @@ export function parseBypassWsMessage(msg: string): { instance: string; bypassed:
   return null;
 }
 
-/** MOD Desktop /pedalboard/info/ is disk metadata — keep live bypass/values from UI + WebSocket on refresh. */
+/**
+ * `/pedalboard/info/` is disk metadata (stale bypass/params on Pi and MOD Desktop).
+ * On routine refresh, keep live values from the UI + WebSocket; use `replace` when switching boards.
+ */
 export function mergePluginsPreservingLiveState(
   prev: EffectPlugin[],
   next: EffectPlugin[],
 ): EffectPlugin[] {
-  if (!isModDesktopMode()) return next;
+  if (prev.length === 0) return next;
   return next.map((p) => {
     const was = prev.find((x) => x.instance === p.instance);
     if (!was) return p;
@@ -202,8 +206,10 @@ export function stabilizePluginOrder(
 export function applyPluginsAfterRefresh(
   prev: EffectPlugin[],
   fromInfo: EffectPlugin[],
+  opts?: { replace?: boolean },
 ): EffectPlugin[] {
-  return stabilizePluginOrder(prev, mergePluginsPreservingLiveState(prev, fromInfo));
+  const base = opts?.replace ? [] : prev;
+  return stabilizePluginOrder(base, mergePluginsPreservingLiveState(base, fromInfo));
 }
 
 async function request<T>(
@@ -320,6 +326,7 @@ function sendWsParam(instance: string, portSymbol: string, value: number): Promi
 
 export function connectWebSocket(onMessage: WSListener): () => void {
   wsListeners.add(onMessage);
+  warmWebSocketForLiveSession();
   return () => {
     wsListeners.delete(onMessage);
   };
@@ -337,8 +344,33 @@ export async function listPedalboards(): Promise<PedalboardSummary[]> {
 
 /** MOD expects /reset before load_bundle (see modep-ctrl) or plugins can stack. */
 export async function resetSession(): Promise<void> {
-  const res = await fetch(apiUrl("/reset/"));
-  if (!res.ok) throw new Error(`reset failed: ${res.status}`);
+  let lastErr: Error | null = null;
+  for (const path of ["/reset/", "/reset"]) {
+    try {
+      const res = await fetch(apiUrl(path));
+      const text = (await res.text()).trim();
+      if (!res.ok) {
+        lastErr = new Error(`reset ${path}: HTTP ${res.status}`);
+        continue;
+      }
+      if (text.startsWith("<")) {
+        lastErr = new Error(
+          `reset ${path} returned HTML — nginx may not proxy /reset to MOD (re-run install-on-pistomp.sh)`,
+        );
+        continue;
+      }
+      if (text === "true" || text === "True") return;
+      try {
+        if (JSON.parse(text) === true) return;
+      } catch {
+        /* not JSON */
+      }
+      lastErr = new Error(`reset ${path}: unexpected body ${text.slice(0, 40)}`);
+    } catch (e) {
+      lastErr = e instanceof Error ? e : new Error("reset failed");
+    }
+  }
+  throw lastErr ?? new Error("reset failed");
 }
 
 export async function loadPedalboard(bundlepath: string): Promise<boolean> {
@@ -352,7 +384,7 @@ export async function loadPedalboard(bundlepath: string): Promise<boolean> {
   if (!res.ok) return false;
   const data = (await res.json()) as { ok?: boolean };
   if (!data.ok) return false;
-  await delay(450);
+  await delay(isPiStompMode() ? 900 : 450);
   return true;
 }
 

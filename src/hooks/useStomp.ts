@@ -33,7 +33,7 @@ export function useStomp() {
   const markDirty = useCallback(() => setDirty(true), []);
 
   const refreshBoard = useCallback(
-    async (bundle: string, live: boolean) => {
+    async (bundle: string, live: boolean, opts?: { replacePlugins?: boolean }) => {
       if (!live) {
         setBoard(demo.DEMO_BOARD);
         setGlobals(demo.DEMO_GLOBALS);
@@ -43,7 +43,9 @@ export function useStomp() {
       const { bundle: resolved, info } = await modui.getLivePedalboardState(bundle);
       setActiveBundle(resolved);
       setBoard((prev) => {
-        const plugins = modui.applyPluginsAfterRefresh(prev.plugins, info.plugins);
+        const plugins = modui.applyPluginsAfterRefresh(prev.plugins, info.plugins, {
+          replace: opts?.replacePlugins,
+        });
         setGlobals(modui.extractGlobalControls(plugins));
         return { ...info, plugins };
       });
@@ -96,7 +98,10 @@ export function useStomp() {
 
   useEffect(() => {
     if (mode !== "live") return;
-    const onRemoteChange = () => {
+    const onPedalboardReload = () => {
+      if (activeBundle) void refreshBoard(activeBundle, true, { replacePlugins: true });
+    };
+    const onDesktopPoll = () => {
       if (activeBundle) void refreshBoard(activeBundle, true);
     };
     const stopWs = modui.connectWebSocket((msg) => {
@@ -136,14 +141,16 @@ export function useStomp() {
         msg.includes("snapshot") ||
         msg.includes("pedalboard")
       ) {
-        onRemoteChange();
+        onPedalboardReload();
       }
     });
-    const pollMs = isModDesktopMode() ? 8000 : 2500;
-    const poll = window.setInterval(onRemoteChange, pollMs);
+    const pollMs = 8000;
+    const poll = isModDesktopMode()
+      ? window.setInterval(onDesktopPoll, pollMs)
+      : undefined;
     return () => {
       stopWs();
-      window.clearInterval(poll);
+      if (poll !== undefined) window.clearInterval(poll);
     };
   }, [mode, activeBundle, refreshBoard]);
 
@@ -156,7 +163,7 @@ export function useStomp() {
         const ok = await modui.loadPedalboard(pb.bundle);
         if (!ok) throw new Error("Failed to load pedalboard");
         setActiveBundle(pb.bundle);
-        await refreshBoard(pb.bundle, true);
+        await refreshBoard(pb.bundle, true, { replacePlugins: true });
       } else {
         setBoard({ ...demo.DEMO_BOARD, title: pb.title });
       }

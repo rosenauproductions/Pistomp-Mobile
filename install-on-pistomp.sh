@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 # Install Pistomp-Mobile on a Pi-Stomp device (run on the Pi as root).
+#
+# Read-only SD (overlayroot): run inside writable chroot — see DEPLOYMENT.md
+#   sudo overlayroot-chroot
+#   cd /home/pistomp/Pistomp-Mobile && bash install-on-pistomp.sh
+#   (~/pi-stomp is the firmware repo — separate from ~/Pistomp-Mobile)
+#   exit
+#   sudo systemctl reload nginx
+#
 set -euo pipefail
 
 APP_NAME="pistomp-mobile"
@@ -43,28 +51,28 @@ server {
         try_files \$uri \$uri/ /index.html;
     }
 
-    location /reset/ {
+    location ^~ /reset {
         proxy_pass http://127.0.0.1:80;
         proxy_http_version 1.1;
-        proxy_set_header Host \$host;
+        proxy_set_header Host 127.0.0.1;
     }
 
     location /pedalboard/ {
         proxy_pass http://127.0.0.1:80;
         proxy_http_version 1.1;
-        proxy_set_header Host \$host;
+        proxy_set_header Host 127.0.0.1;
     }
 
     location /effect/ {
         proxy_pass http://127.0.0.1:80;
         proxy_http_version 1.1;
-        proxy_set_header Host \$host;
+        proxy_set_header Host 127.0.0.1;
     }
 
     location /snapshot/ {
         proxy_pass http://127.0.0.1:80;
         proxy_http_version 1.1;
-        proxy_set_header Host \$host;
+        proxy_set_header Host 127.0.0.1;
     }
 
     location /websocket {
@@ -72,7 +80,7 @@ server {
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_set_header Host \$host;
+        proxy_set_header Host 127.0.0.1;
         proxy_read_timeout 3600s;
         proxy_send_timeout 3600s;
     }
@@ -84,5 +92,5 @@ nginx -t
 systemctl reload nginx
 
 echo ""
-echo "Done. Open http://172.24.1.1:${PORT} from your phone (Pi-Stomp hotspot)."
+echo "Done. Open http://pistomp.local:${PORT} from your phone (or http://172.24.1.1:${PORT} if .local does not resolve)."
 echo "Add to Home Screen for an app icon."

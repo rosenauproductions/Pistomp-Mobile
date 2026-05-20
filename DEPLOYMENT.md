@@ -12,6 +12,21 @@ This guide walks through putting the mobile web UI on your Pi-Stomp so you can c
 
 The phone talks only to the Pi. nginx forwards `/pedalboard/*`, `/effect/*`, `/snapshot/*`, and `/websocket` to MOD-UI on `127.0.0.1:80`, so the browser stays same-origin and nothing needs CORS hacks.
 
+### Directory layout on the Pi (two folders)
+
+On a typical Pi-Stomp home directory you have **both**:
+
+| Path | What it is |
+|------|------------|
+| `~/pi-stomp/` | Pi-Stomp **firmware** (MOD handler, LCD, ALSA, `run_mobile.sh`, etc.) |
+| `~/Pistomp-Mobile/` | **Mobile web UI** repo (`dist/`, `install-on-pistomp.sh`, `update-dist-on-pistomp.sh`) |
+
+They are separate projects. **Install and update the phone UI only from `~/Pistomp-Mobile`** (must contain `dist/` after `npm run build` on your Mac).
+
+Do not run `install-on-pistomp.sh` from `~/pi-stomp` unless you also copied `dist/` and the install scripts there.
+
+Installed files live under **`/opt/pistomp-mobile/dist/`** (nginx), not inside `~/pi-stomp`.
+
 ---
 
 ## Prerequisites
@@ -26,7 +41,8 @@ The phone talks only to the Pi. nginx forwards `/pedalboard/*`, `/effect/*`, `/s
 
 - Pi-Stomp OS image with **MOD-UI** running (default on port 80)
 - SSH access to the Pi (same network or hotspot)
-- `sudo` privileges
+- Default login on many images: user **`pistomp`**, password **`pistomp`** (change if your image differs)
+- `sudo` privileges (same password often works for `sudo`)
 
 You do **not** need Node.js on the Pi if you build on your computer and copy the `dist/` folder.
 
@@ -114,7 +130,7 @@ sudo bash install-on-pistomp.sh
 
 ### 4. Phone
 
-Join the Pi-Stomp hotspot → **http://172.24.1.1:8080**
+Join the Pi-Stomp hotspot → **http://pistomp.local:8080**
 
 Future updates on the Pi:
 
@@ -136,44 +152,88 @@ Copy the **entire project folder** (or at minimum: `dist/`, `install-on-pistomp.
 
 ### Option A — SCP (recommended)
 
-Replace `pi` and `pistomp.local` with your Pi’s SSH user and hostname/IP.
+Default SSH user is **`pistomp`**. On the Pi-Stomp hotspot, **`pistomp.local`** usually resolves via mDNS (same as SSH/SCP).
 
 ```bash
 # From your computer, inside the parent of Pistomp-Mobile:
-scp -r Pistomp-Mobile pi@pistomp.local:/home/pi/
+scp -r Pistomp-Mobile pistomp@pistomp.local:/home/pistomp/
 ```
 
-If you are already on the Pi’s hotspot:
+If `pistomp.local` does not resolve, use the hotspot gateway IP:
 
 ```bash
-scp -r Pistomp-Mobile pi@172.24.1.1:/home/pi/
+scp -r Pistomp-Mobile pistomp@172.24.1.1:/home/pistomp/
 ```
+
+(`scp` will prompt for the password unless you use SSH keys.)
 
 ### Option B — SFTP
 
-Connect with Cyberduck, FileZilla, or VS Code “Remote - SSH” and upload the `Pistomp-Mobile` folder to `/home/pi/`.
+Connect with Cyberduck, FileZilla, or VS Code “Remote - SSH” and upload the `Pistomp-Mobile` folder to `/home/pistomp/`.
 
 ### Option C — USB
 
-Copy the folder to a USB stick, plug it into the Pi, and copy to `/home/pi/Pistomp-Mobile`.
+Copy the folder to a USB stick, plug it into the Pi, and copy to `/home/pistomp/Pistomp-Mobile`.
 
 ---
 
 ## Step 4 — SSH into the Pi
 
 ```bash
-ssh pi@pistomp.local
-# or, on hotspot:
-ssh pi@172.24.1.1
+ssh pistomp@pistomp.local
 ```
 
-Default Pi-Stomp hotspot gateway is **`172.24.1.1`** (phones get addresses in `172.24.1.50–150`).
+If `.local` fails: `ssh pistomp@172.24.1.1` (hotspot gateway; phones get `172.24.1.50–150`).
 
 ---
 
 ## Step 5 — Run the install script
 
-On the Pi:
+### Read-only root (overlayroot / “locked SD”)
+
+Many Pi-Stomp images use **overlayroot**: the running system is read-only; the real SD is only writable inside a chroot.
+
+| Step | Writable? |
+|------|-----------|
+| `scp` → `/home/pistomp/` | ✅ Usually yes (your SCP already worked) |
+| Install to `/opt/…`, `/etc/nginx/` | ❌ Needs **`sudo overlayroot-chroot`** |
+
+**First-time install** (nginx + `/opt/pistomp-mobile`):
+
+```bash
+ssh pistomp@pistomp.local
+cd ~/Pistomp-Mobile
+chmod +x install-on-pistomp.sh update-dist-on-pistomp.sh
+
+sudo overlayroot-chroot
+# writable shell (often as root) — use Pistomp-Mobile, not pi-stomp:
+cd /home/pistomp/Pistomp-Mobile
+bash install-on-pistomp.sh
+exit
+
+sudo systemctl reload nginx
+```
+
+Run `systemctl reload nginx` **after** you `exit` the chroot (systemd is the live system, not the chroot).
+
+**Later updates** (new `dist/` only — nginx already configured):
+
+```bash
+ssh pistomp@pistomp.local
+# Mac: scp -r Pistomp-Mobile pistomp@pistomp.local:/home/pistomp/
+#   → creates /home/pistomp/Pistomp-Mobile (sibling of /home/pistomp/pi-stomp)
+
+sudo overlayroot-chroot
+cd /home/pistomp/Pistomp-Mobile
+bash update-dist-on-pistomp.sh
+exit
+
+sudo systemctl reload nginx
+```
+
+### Writable root (unusual)
+
+If your image is not overlayroot, a normal install is enough:
 
 ```bash
 cd ~/Pistomp-Mobile
@@ -189,14 +249,15 @@ The script will:
 4. Proxy MOD-UI API paths to `http://127.0.0.1:80`
 5. Reload nginx
 
-**Expected output:** `Done. Open http://172.24.1.1:8080 from your phone...`
+**Expected output:** `Done. Open http://pistomp.local:8080 from your phone...`
 
 ### If the script fails
 
 | Error | Fix |
 |-------|-----|
 | `Missing ./dist` | Run `npm run build` on your computer and copy `dist/` again |
-| `Run as root` | Use `sudo bash install-on-pistomp.sh` |
+| `Read-only file system` | Use [overlayroot-chroot](#read-only-root-overlayroot--locked-sd) above |
+| `Run as root` | Inside chroot, `bash install-on-pistomp.sh` (root). Outside, `sudo bash install-on-pistomp.sh` |
 | `nginx -t` fails | Another site may conflict on port 8080; edit `/etc/nginx/sites-available/pistomp-mobile` |
 | MOD-UI not responding | See [Troubleshooting](#troubleshooting) |
 
@@ -226,7 +287,7 @@ sudo systemctl start mod-ui
 2. On your phone, join the Pi-Stomp Wi‑Fi network.
 3. Open a browser and go to:
 
-   **http://172.24.1.1:8080**
+   **http://pistomp.local:8080**
 
 4. You should see the Pistomp-Mobile UI. The badge should say **LIVE** when MOD-UI is reachable.
 
@@ -247,17 +308,67 @@ Works offline for the UI shell after the first load; control still requires the 
 
 ## Updating after a new release
 
-On your computer:
+### Quick workflow (copy `dist/` only)
+
+Use this when `~/Pistomp-Mobile` on the Pi already has `install-on-pistomp.sh` (from an earlier full copy). Build on the Mac, copy **only** `dist/`, install inside overlayroot.
+
+**Mac:**
 
 ```bash
 cd Pistomp-Mobile
 git pull
-npm install
 npm run build
-scp -r dist pi@172.24.1.1:/home/pi/Pistomp-Mobile/
+scp -r dist install-on-pistomp.sh update-dist-on-pistomp.sh \
+  pistomp@pistomp.local:/home/pistomp/Pistomp-Mobile/
 ```
 
-On the Pi:
+Copy **`install-on-pistomp.sh`** whenever nginx changed — `scp dist` alone does **not** update `/etc/nginx`. Without `/reset` proxied to MOD you get: *reset returned HTML* and pedalboards **stack** when switching.
+
+If SCP to `~/` fails on a locked overlay SD:
+
+```bash
+scp -r dist install-on-pistomp.sh update-dist-on-pistomp.sh \
+  pistomp@pistomp.local:/media/root-ro/home/pistomp/Pistomp-Mobile/
+```
+
+**Check from your Mac** (must print `true`, not `<!DOCTYPE`):
+
+```bash
+curl -s http://pistomp.local:8080/reset/
+```
+
+**Pi:**
+
+```bash
+ssh pistomp@pistomp.local
+sudo overlayroot-chroot
+cd /home/pistomp/Pistomp-Mobile && bash install-on-pistomp.sh
+exit
+sudo systemctl reload nginx
+```
+
+`install-on-pistomp.sh` copies `dist/` → `/opt/pistomp-mobile/dist/` and refreshes nginx (needed when the install script changed). For **JS-only** updates when nginx is already correct:
+
+```bash
+sudo overlayroot-chroot
+cd /home/pistomp/Pistomp-Mobile && bash update-dist-on-pistomp.sh
+exit
+sudo systemctl reload nginx
+```
+
+A **`sudo reboot`** after nginx changes is optional; `reload nginx` is usually enough.
+
+### First time on a Pi (full project copy)
+
+Once per device, copy the whole repo (or at least `dist/` + `install-on-pistomp.sh` + `update-dist-on-pistomp.sh`):
+
+```bash
+scp -r Pistomp-Mobile pistomp@pistomp.local:/home/pistomp/
+```
+
+Then overlayroot + `bash install-on-pistomp.sh` as above.
+
+### Writable-root images (no overlayroot)
 
 ```bash
 cd ~/Pistomp-Mobile
@@ -290,21 +401,35 @@ sudo systemctl reload nginx
 ### Page loads but badge says DEMO
 
 - Phone cannot reach MOD-UI through the proxy.
-- Confirm you opened **`:8080`**, not only `http://172.24.1.1` (port 80 is full MOD-UI desktop).
+- Confirm you opened **`:8080`**, e.g. `http://pistomp.local:8080` — not port 80 (full MOD-UI desktop).
 - In settings, clear the host field and tap **Save & reconnect**.
 - On the Pi: `curl http://127.0.0.1/pedalboard/list`
 
 ### Save or bypass does nothing
 
 - Must be **LIVE** mode, not DEMO.
-- In settings (gear), **clear the Host URL** so requests stay on `:8080` (same origin). A host of `http://172.24.1.1` (port 80) while the page is on `:8080` will not control MOD correctly.
+- In settings (gear), **clear the Host URL** so requests stay on `:8080` (same origin). A host of `http://pistomp.local` (port 80) while the page is on `:8080` will not control MOD correctly.
 - Bypass uses the MOD **WebSocket** (`/websocket`); reinstall or reload nginx after updating so `/reset/` and WebSocket proxy are present.
 - Check MOD-UI: `sudo journalctl -u mod-ui -f` while toggling an effect.
 
-### Pedalboards stack / duplicate effects in the mobile UI
+### `reset returned HTML` / pedalboards stack
 
-- Fixed in current app by calling **`GET /reset/`** before each pedalboard load (same as MOD’s modep tools).
-- Rebuild, redeploy `dist/`, and run `sudo bash install-on-pistomp.sh` again.
+The app calls **`GET /reset/`** before each pedalboard load. If nginx serves the mobile **`index.html`** instead, you see this error and effects **accumulate**.
+
+**Fix:**
+
+1. Mac: `scp install-on-pistomp.sh` to `~/Pistomp-Mobile/` (not only `dist/`).
+2. Pi chroot: `cd /home/pistomp/Pistomp-Mobile && bash install-on-pistomp.sh`
+3. `exit` then `sudo systemctl reload nginx`
+4. Mac: `curl -s http://pistomp.local:8080/reset/` → must be **`true`**
+
+Manual check on Pi: `grep -A3 'location.*reset' /etc/nginx/sites-available/pistomp-mobile` should show `proxy_pass http://127.0.0.1:80` and `Host 127.0.0.1`.
+
+### Bypass / stomps out of sync on `:8080`
+
+- Clear **Host** in app settings (same origin only).
+- nginx must proxy **`/websocket`** with `Host 127.0.0.1` (included in current `install-on-pistomp.sh`).
+- Hard-refresh the phone page after updating `dist/`.
 
 ### Changes on pistomp.local do not update :8080 immediately
 
@@ -317,7 +442,7 @@ sudo systemctl reload nginx
 
 ### `pistomp.local` does not resolve
 
-- Use **`172.24.1.1`** on the hotspot.
+- On the Pi-Stomp hotspot, try **`http://172.24.1.1:8080`** and **`ssh pistomp@172.24.1.1`** instead.
 - On your home LAN, try the Pi’s LAN IP instead.
 
 ### Port 8080 already in use
@@ -347,7 +472,7 @@ Without MOD-UI, the app runs in **DEMO** mode with sample data.
 ## Network summary
 
 ```
-Phone  →  http://172.24.1.1:8080  →  nginx
+Phone  →  http://pistomp.local:8080  →  nginx
                                       ├─ /              →  /opt/pistomp-mobile/dist/
                                       └─ /pedalboard/*  →  MOD-UI :80
                                           /effect/*

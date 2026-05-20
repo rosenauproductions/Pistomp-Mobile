@@ -36,20 +36,28 @@ npm run build
 **2. Copy to the Pi** (example):
 
 ```bash
-scp -r Pistomp-Mobile pi@172.24.1.1:/home/pi/
+scp -r Pistomp-Mobile pistomp@pistomp.local:/home/pistomp/
 ```
 
-**3. On the Pi** — install (requires `dist/` from step 1):
+On the Pi you will have `~/pi-stomp/` (firmware) and `~/Pistomp-Mobile/` (this UI) as **sibling folders**. Install from **`~/Pistomp-Mobile`** only.
+
+Default SSH login on many Pi-Stomp images: **`pistomp`** / **`pistomp`**. If `.local` does not resolve, use **`172.24.1.1`** on the hotspot.
+
+**3. On the Pi** — install (requires `dist/` from step 1).
+
+Typical update: `scp -r dist` → `~/Pistomp-Mobile/`, then overlayroot + `install-on-pistomp.sh`. See [DEPLOYMENT.md](./DEPLOYMENT.md#quick-workflow-copy-dist-only).
 
 ```bash
-ssh pi@172.24.1.1
-cd ~/Pistomp-Mobile
-sudo bash install-on-pistomp.sh
+ssh pistomp@pistomp.local
+sudo overlayroot-chroot
+cd /home/pistomp/Pistomp-Mobile && bash install-on-pistomp.sh
+exit
+sudo systemctl reload nginx
 ```
 
 **4. On your phone** — join the Pi-Stomp hotspot, then open:
 
-**http://172.24.1.1:8080**
+**http://pistomp.local:8080**
 
 Leave the connection **Host** field empty in app settings (gear icon) so API calls use the nginx proxy.
 
