@@ -402,6 +402,19 @@ async function getCurrentFromModLastJson(): Promise<string | null> {
   }
 }
 
+/** Pi-Stomp writes ~/data/last.json when the loaded board changes (nginx serves as /pistomp-last.json). */
+async function getCurrentFromPiLastJson(): Promise<string | null> {
+  try {
+    const res = await fetch(apiUrl("/pistomp-last.json"));
+    if (!res.ok) return null;
+    const data = (await res.json()) as { pedalboard?: string };
+    const bundle = data.pedalboard?.trim();
+    return bundle && bundle.length > 0 ? bundle : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Currently loaded pedalboard bundle path (plain text), if supported. */
 export async function getCurrentPedalboardBundle(): Promise<string | null> {
   if (isPiStompMode()) {
@@ -414,7 +427,7 @@ export async function getCurrentPedalboardBundle(): Promise<string | null> {
     } catch {
       /* optional on some MOD builds */
     }
-    return null;
+    return getCurrentFromPiLastJson();
   }
   return getCurrentFromModLastJson();
 }
@@ -502,14 +515,16 @@ async function setParameterViaPiStomp(
   value: number,
 ): Promise<boolean> {
   const instPath = instance.startsWith("/") ? instance : `/${instance}`;
+  /* Do not encode ":" in :bypass — MOD route expects literal :bypass */
   const path = `/effect/parameter/pi_stomp_set//graph${instPath}/${port}`;
   const res = await fetch(apiUrl(path), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ value: value }),
+    body: JSON.stringify({ value }),
   });
   if (!res.ok) return false;
-  const text = await res.text();
+  const text = (await res.text()).trim();
+  if (text.startsWith("<")) return false;
   if (!text) return true;
   try {
     const ok = JSON.parse(text);

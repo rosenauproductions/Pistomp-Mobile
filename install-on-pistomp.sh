@@ -51,6 +51,11 @@ server {
         try_files \$uri \$uri/ /index.html;
     }
 
+    location = /pistomp-last.json {
+        alias /home/pistomp/data/last.json;
+        default_type application/json;
+    }
+
     location ^~ /reset {
         proxy_pass http://127.0.0.1:80;
         proxy_http_version 1.1;
