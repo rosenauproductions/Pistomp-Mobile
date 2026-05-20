@@ -33,26 +33,26 @@ npm install
 npm run build
 ```
 
-**2. Copy to the Pi** (example):
+**2. Copy `dist/` to the Pi** (locked SD — use root-ro path):
 
 ```bash
-scp -r Pistomp-Mobile pistomp@pistomp.local:/home/pistomp/
+scp -r dist pistomp@pistomp.local:/media/root-ro/home/pistomp/Pistomp-Mobile/
 ```
 
-On the Pi you will have `~/pi-stomp/` (firmware) and `~/Pistomp-Mobile/` (this UI) as **sibling folders**. Install from **`~/Pistomp-Mobile`** only.
+First time also copy `install-on-pistomp.sh` into that folder. See [DEPLOYMENT.md](./DEPLOYMENT.md#standard-workflow-locked-sd--overlayroot).
 
-Default SSH login on many Pi-Stomp images: **`pistomp`** / **`pistomp`**. If `.local` does not resolve, use **`172.24.1.1`** on the hotspot.
+On the Pi: `~/pi-stomp/` (firmware) and `~/Pistomp-Mobile/` (this UI) are **sibling folders**. The Pi copy is **not** a git repo.
 
-**3. On the Pi** — install (requires `dist/` from step 1).
+Default SSH: **`pistomp`** / **`pistomp`**. Phone/UI: **http://pistomp.local:8080**
 
-Typical update: `scp -r dist` → `~/Pistomp-Mobile/`, then overlayroot + `install-on-pistomp.sh`. See [DEPLOYMENT.md](./DEPLOYMENT.md#quick-workflow-copy-dist-only).
+**3. On the Pi** — overlayroot install + reboot:
 
 ```bash
 ssh pistomp@pistomp.local
 sudo overlayroot-chroot
 cd /home/pistomp/Pistomp-Mobile && bash install-on-pistomp.sh
 exit
-sudo systemctl reload nginx
+sudo reboot
 ```
 
 **4. On your phone** — join the Pi-Stomp hotspot, then open:

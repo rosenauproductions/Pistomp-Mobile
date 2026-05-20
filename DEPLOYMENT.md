@@ -308,9 +308,9 @@ Works offline for the UI shell after the first load; control still requires the 
 
 ## Updating after a new release
 
-### Quick workflow (copy `dist/` only)
+### Standard workflow (locked SD / overlayroot)
 
-Use this when `~/Pistomp-Mobile` on the Pi already has `install-on-pistomp.sh` (from an earlier full copy). Build on the Mac, copy **only** `dist/`, install inside overlayroot.
+This is the flow that works on a read-only Pi-Stomp image. **`~/Pistomp-Mobile` on the Pi is not a git repo** — do not run `git pull` there. Git happens on the Mac only.
 
 **Mac:**
 
@@ -318,24 +318,10 @@ Use this when `~/Pistomp-Mobile` on the Pi already has `install-on-pistomp.sh` (
 cd Pistomp-Mobile
 git pull
 npm run build
-scp -r dist install-on-pistomp.sh update-dist-on-pistomp.sh \
-  pistomp@pistomp.local:/home/pistomp/Pistomp-Mobile/
+scp -r dist pistomp@pistomp.local:/media/root-ro/home/pistomp/Pistomp-Mobile/
 ```
 
-Copy **`install-on-pistomp.sh`** whenever nginx changed — `scp dist` alone does **not** update `/etc/nginx`. Without `/reset` proxied to MOD you get: *reset returned HTML* and pedalboards **stack** when switching.
-
-If SCP to `~/` fails on a locked overlay SD:
-
-```bash
-scp -r dist install-on-pistomp.sh update-dist-on-pistomp.sh \
-  pistomp@pistomp.local:/media/root-ro/home/pistomp/Pistomp-Mobile/
-```
-
-**Check from your Mac** (must print `true`, not `<!DOCTYPE`):
-
-```bash
-curl -s http://pistomp.local:8080/reset/
-```
+(`/media/root-ro/home/pistomp/…` is the same tree as `/home/pistomp/…` on the Pi.)
 
 **Pi:**
 
@@ -344,29 +330,40 @@ ssh pistomp@pistomp.local
 sudo overlayroot-chroot
 cd /home/pistomp/Pistomp-Mobile && bash install-on-pistomp.sh
 exit
-sudo systemctl reload nginx
+sudo reboot
 ```
 
-`install-on-pistomp.sh` copies `dist/` → `/opt/pistomp-mobile/dist/` and refreshes nginx (needed when the install script changed). For **JS-only** updates when nginx is already correct:
+`install-on-pistomp.sh` must already exist under `~/Pistomp-Mobile` (see first-time setup below). It copies `dist/` → `/opt/pistomp-mobile/dist/` and writes nginx config. **`git pull` on the Pi is not used.**
+
+**Check from your Mac** after the Pi is back (must print `true`, not HTML):
 
 ```bash
-sudo overlayroot-chroot
-cd /home/pistomp/Pistomp-Mobile && bash update-dist-on-pistomp.sh
-exit
-sudo systemctl reload nginx
+curl -s http://pistomp.local:8080/reset/
 ```
 
-A **`sudo reboot`** after nginx changes is optional; `reload nginx` is usually enough.
+Phone: **http://pistomp.local:8080** — hard refresh; clear **Host** in settings.
 
-### First time on a Pi (full project copy)
+### When nginx config changed (e.g. `/reset` proxy)
 
-Once per device, copy the whole repo (or at least `dist/` + `install-on-pistomp.sh` + `update-dist-on-pistomp.sh`):
+`scp dist` alone does **not** update `/etc/nginx`. Also copy the install script from the Mac, then run the same Pi steps:
 
 ```bash
-scp -r Pistomp-Mobile pistomp@pistomp.local:/home/pistomp/
+scp install-on-pistomp.sh pistomp@pistomp.local:/media/root-ro/home/pistomp/Pistomp-Mobile/
 ```
 
-Then overlayroot + `bash install-on-pistomp.sh` as above.
+Without this, `curl …/reset/` returns HTML and pedalboards **stack** when switching.
+
+### First time on a Pi
+
+Copy **`install-on-pistomp.sh`** once (plus `dist/` from `npm run build`):
+
+```bash
+scp install-on-pistomp.sh dist pistomp@pistomp.local:/media/root-ro/home/pistomp/Pistomp-Mobile/
+```
+
+Then the Pi steps above (overlayroot + `install-on-pistomp.sh` + reboot).
+
+Optional: `update-dist-on-pistomp.sh` in the same folder for dist-only copies inside chroot without rewriting nginx.
 
 ### Writable-root images (no overlayroot)
 
