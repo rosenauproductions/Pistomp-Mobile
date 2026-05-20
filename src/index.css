@@ -410,6 +410,42 @@ input {
   color: var(--text);
 }
 
+.runtime-mode-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.runtime-mode-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.runtime-mode-btn {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.65rem 0.5rem;
+  background: var(--bg);
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.runtime-mode-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+}
+
+.runtime-mode-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
 .btn-primary {
   border: none;
   border-radius: 10px;

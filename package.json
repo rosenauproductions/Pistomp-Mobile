@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "MOD_API_TARGET=http://127.0.0.1:18181 vite",
+    "dev:pistomp": "MOD_API_TARGET=http://127.0.0.1:80 vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview"
   },

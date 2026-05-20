@@ -63,10 +63,13 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for SCP/SFTP options, build-on-Pi steps, tr
 
 ```bash
 npm install
-npm run dev
+npm run dev          # MOD Desktop :18181 (local emulator QA)
+npm run dev:pistomp  # Pi-Stomp MOD-UI :80 (tunnel or device)
 ```
 
-Open http://localhost:5173. Uses **DEMO** data unless MOD-UI is reachable on port 80 (Vite proxies API paths in dev).
+Open http://localhost:5173. In dev, use **Settings → Runtime** to switch **MOD Desktop** vs **Pi-Stomp** behavior (production on the Pi is always Pi-Stomp).
+
+See [docs/MOD-DESKTOP-VS-PISTOMP.md](./docs/MOD-DESKTOP-VS-PISTOMP.md) for what must not ship on the device.
 
 ---
 

@@ -1,3 +1,8 @@
+import {
+  isModDesktopMode,
+  isPiStompMode,
+  RUNTIME_MODE_HEADER,
+} from "../lib/runtimeMode";
 import type {
   ConnectionMode,
   EffectPlugin,
@@ -6,6 +11,17 @@ import type {
   PedalboardSummary,
   SnapshotsMap,
 } from "./types";
+
+/** MOD host uses /graph/… paths on WebSocket; pedalboard/info uses short instance names. */
+function normalizeWsInstance(raw: string): string {
+  const s = raw.trim();
+  return s.startsWith("/graph/") ? s.slice("/graph/".length) : s;
+}
+
+function wsPortPath(instance: string, port: string): string {
+  const base = instance.startsWith("/graph/") ? instance : `/graph/${instance}`;
+  return `${base}/${port}`;
+}
 
 const HOST_KEY = "pistomp-mobile-host";
 
@@ -40,13 +56,154 @@ function apiUrl(path: string): string {
   return base ? `${base}${p}` : p;
 }
 
-function wsUrl(): string {
+/** Same host as the page — Vite proxies /websocket to MOD (avoids localhost → 127.0.0.1 failures). */
+function wsUrlCandidates(): string[] {
   const host = getHost();
   if (host) {
-    return `${host.replace(/^http/, "ws").replace(/\/$/, "")}/websocket`;
+    return [`${host.replace(/^http/, "ws").replace(/\/$/, "")}/websocket`];
   }
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${proto}//${window.location.host}/websocket`;
+  /* MOD Desktop returns 403 for cross-origin WS; dev uses Vite proxy on same host. */
+  return [`${proto}//${window.location.host}/websocket`];
+}
+
+/** Call after switching runtime mode so the next action opens a fresh socket. */
+export function resetWebSocketConnection(): void {
+  ws?.close();
+  ws = null;
+  wsConnectPromise = null;
+  wsWarmAttempted = false;
+}
+
+export function isWebSocketOpen(): boolean {
+  return ws?.readyState === WebSocket.OPEN;
+}
+
+/** Opens MOD WebSocket on first stomp/param — not at page load (avoids Vite ECONNRESET spam). */
+function primeWebSocketForControl(): void {
+  if (wsWarmAttempted && ws?.readyState === WebSocket.OPEN) return;
+  wsWarmAttempted = true;
+  void ensureWebSocket().catch(() => {
+    wsWarmAttempted = false;
+  });
+}
+
+/** Call when entering live mode so MOD Desktop changes stream in before the first tap. */
+export function warmWebSocketForLiveSession(): void {
+  primeWebSocketForControl();
+}
+
+export type ParamSetWsEvent =
+  | { kind: "bypass"; instance: string; bypassed: boolean }
+  | { kind: "param"; instance: string; port: string; value: number };
+
+/**
+ * MOD broadcasts `param_set /graph/larynx rate 0.1` (spaced) or `param_set /graph/larynx/rate 0.1` (slash).
+ * Outgoing commands use the slash form with /graph/.
+ */
+export function parseParamSetWsMessage(msg: string): ParamSetWsEvent | null {
+  if (!msg.startsWith("param_set ")) return null;
+  const rest = msg.slice("param_set ".length).trim();
+
+  const bypassSlash = rest.match(/^(.+?)\/:bypass\s+([\d.]+)/);
+  if (bypassSlash) {
+    return {
+      kind: "bypass",
+      instance: normalizeWsInstance(bypassSlash[1]),
+      bypassed: Number(bypassSlash[2]) >= 0.5,
+    };
+  }
+  const bypassSpaced = rest.match(/^(\S+)\s+:bypass\s+([\d.]+)/);
+  if (bypassSpaced) {
+    return {
+      kind: "bypass",
+      instance: normalizeWsInstance(bypassSpaced[1]),
+      bypassed: Number(bypassSpaced[2]) >= 0.5,
+    };
+  }
+
+  const slash = rest.match(/^(\S+?)\/([^/\s]+)\s+([\d.eE+-]+)/);
+  if (slash) {
+    const value = Number(slash[3]);
+    if (!Number.isNaN(value)) {
+      return {
+        kind: "param",
+        instance: normalizeWsInstance(slash[1]),
+        port: slash[2],
+        value,
+      };
+    }
+  }
+
+  const spaced = rest.match(/^(\S+)\s+(\S+)\s+([\d.eE+-]+)/);
+  if (spaced && spaced[2] !== ":bypass") {
+    const value = Number(spaced[3]);
+    if (!Number.isNaN(value)) {
+      return {
+        kind: "param",
+        instance: normalizeWsInstance(spaced[1]),
+        port: spaced[2],
+        value,
+      };
+    }
+  }
+  return null;
+}
+
+/** @deprecated Use parseParamSetWsMessage */
+export function parseBypassWsMessage(msg: string): { instance: string; bypassed: boolean } | null {
+  const ev = parseParamSetWsMessage(msg);
+  if (ev?.kind === "bypass") return { instance: ev.instance, bypassed: ev.bypassed };
+  return null;
+}
+
+/** MOD Desktop /pedalboard/info/ is disk metadata — keep live bypass/values from UI + WebSocket on refresh. */
+export function mergePluginsPreservingLiveState(
+  prev: EffectPlugin[],
+  next: EffectPlugin[],
+): EffectPlugin[] {
+  if (!isModDesktopMode()) return next;
+  return next.map((p) => {
+    const was = prev.find((x) => x.instance === p.instance);
+    if (!was) return p;
+    return {
+      ...p,
+      bypassed: was.bypassed,
+      ports: p.ports.map((pt) => {
+        const live = was.ports.find((w) => w.symbol === pt.symbol);
+        return live ? { ...pt, value: live.value } : pt;
+      }),
+    };
+  });
+}
+
+/** `/pedalboard/info/` plugin order is not stable — keep grid order from the UI between polls. */
+export function stabilizePluginOrder(
+  prev: EffectPlugin[],
+  next: EffectPlugin[],
+): EffectPlugin[] {
+  if (prev.length === 0) return next;
+  const remaining = new Map(next.map((p) => [p.instance, p]));
+  const ordered: EffectPlugin[] = [];
+  for (const p of prev) {
+    const fresh = remaining.get(p.instance);
+    if (fresh) {
+      ordered.push(fresh);
+      remaining.delete(p.instance);
+    }
+  }
+  for (const p of remaining.values()) {
+    ordered.push(p);
+  }
+  return ordered;
+}
+
+/** Merge live MOD Desktop state and keep a stable stomp grid order after HTTP refresh. */
+export function applyPluginsAfterRefresh(
+  prev: EffectPlugin[],
+  fromInfo: EffectPlugin[],
+): EffectPlugin[] {
+  return stabilizePluginOrder(prev, mergePluginsPreservingLiveState(prev, fromInfo));
 }
 
 async function request<T>(
@@ -57,9 +214,12 @@ async function request<T>(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
+    const headers = new Headers(init?.headers);
+    headers.set(RUNTIME_MODE_HEADER, isPiStompMode() ? "pistomp" : "modDesktop");
     const res = await fetch(apiUrl(path), {
       ...init,
       signal: controller.signal,
+      headers,
     });
     if (!res.ok) {
       throw new Error(`${res.status} ${res.statusText}`);
@@ -82,6 +242,7 @@ type WSListener = (message: string) => void;
 
 let ws: WebSocket | null = null;
 let wsConnectPromise: Promise<WebSocket> | null = null;
+let wsWarmAttempted = false;
 const wsListeners = new Set<WSListener>();
 
 function attachSocket(socket: WebSocket): void {
@@ -95,25 +256,55 @@ function attachSocket(socket: WebSocket): void {
   };
 }
 
+function connectWebSocketOnce(url: string): Promise<WebSocket> {
+  return new Promise((resolve, reject) => {
+    const socket = new WebSocket(url);
+    const timer = window.setTimeout(() => {
+      socket.close();
+      reject(new Error("WebSocket timeout"));
+    }, 8000);
+
+    const fail = () => {
+      window.clearTimeout(timer);
+      reject(new Error("WebSocket failed"));
+    };
+
+    socket.onopen = () => {
+      window.clearTimeout(timer);
+      ws = socket;
+      attachSocket(socket);
+      resolve(socket);
+    };
+    socket.onerror = fail;
+    socket.onclose = () => {
+      window.clearTimeout(timer);
+      if (ws === socket) {
+        ws = null;
+      }
+    };
+  });
+}
+
+async function openWebSocketWithFallback(): Promise<WebSocket> {
+  const urls = wsUrlCandidates();
+  let lastError: Error | null = null;
+  for (const url of urls) {
+    try {
+      return await connectWebSocketOnce(url);
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error("WebSocket failed");
+    }
+  }
+  throw lastError ?? new Error("WebSocket failed");
+}
+
 function ensureWebSocket(): Promise<WebSocket> {
   if (ws?.readyState === WebSocket.OPEN) return Promise.resolve(ws);
   if (wsConnectPromise) return wsConnectPromise;
 
-  wsConnectPromise = new Promise((resolve, reject) => {
-    try {
-      const socket = new WebSocket(wsUrl());
-      ws = socket;
-      socket.onopen = () => {
-        attachSocket(socket);
-        resolve(socket);
-      };
-      socket.onerror = () => reject(new Error("WebSocket failed"));
-      socket.onclose = () => {
-        ws = null;
-        wsConnectPromise = null;
-      };
-    } catch (e) {
-      reject(e);
+  wsConnectPromise = openWebSocketWithFallback().finally(() => {
+    if (ws?.readyState !== WebSocket.OPEN) {
+      wsConnectPromise = null;
     }
   });
 
@@ -121,42 +312,22 @@ function ensureWebSocket(): Promise<WebSocket> {
 }
 
 function sendWsParam(instance: string, portSymbol: string, value: number): Promise<void> {
+  const port = wsPortPath(instance, portSymbol);
   return ensureWebSocket().then((socket) => {
-    socket.send(`param_set ${instance}/${portSymbol} ${value}`);
+    socket.send(`param_set ${port} ${value}`);
   });
 }
 
 export function connectWebSocket(onMessage: WSListener): () => void {
   wsListeners.add(onMessage);
-  void ensureWebSocket().catch(() => {
-    /* retry on next action */
-  });
-
-  const retryTimer = window.setInterval(() => {
-    if (ws?.readyState === WebSocket.OPEN) return;
-    wsConnectPromise = null;
-    void ensureWebSocket().catch(() => undefined);
-  }, 4000);
-
   return () => {
     wsListeners.delete(onMessage);
-    window.clearInterval(retryTimer);
-    if (wsListeners.size === 0) {
-      ws?.close();
-      ws = null;
-      wsConnectPromise = null;
-    }
   };
 }
 
 export async function testConnection(): Promise<boolean> {
   fixHostForCurrentOrigin();
   await request<PedalboardSummary[]>("/pedalboard/list");
-  try {
-    await ensureWebSocket();
-  } catch {
-    /* WS optional for list; required for reliable bypass */
-  }
   return true;
 }
 
@@ -185,16 +356,39 @@ export async function loadPedalboard(bundlepath: string): Promise<boolean> {
   return true;
 }
 
-/** Currently loaded pedalboard bundle path (plain text), if supported. */
-export async function getCurrentPedalboardBundle(): Promise<string | null> {
+/** MOD Desktop writes ~/Documents/MOD Desktop/last.json (dev-only via Vite). */
+async function getCurrentFromModLastJson(): Promise<string | null> {
+  if (!isModDesktopMode() || getHost()) return null;
   try {
-    const res = await fetch(apiUrl("/pedalboard/current"));
+    const res = await fetch("/mod-last.json");
     if (!res.ok) return null;
-    const text = (await res.text()).trim();
-    return text.length > 0 ? text : null;
+    const data = (await res.json()) as { pedalboard?: string };
+    const bundle = data.pedalboard?.trim();
+    return bundle && bundle.length > 0 ? bundle : null;
   } catch {
     return null;
   }
+}
+
+/** Currently loaded pedalboard bundle path (plain text), if supported. */
+export async function getCurrentPedalboardBundle(): Promise<string | null> {
+  if (isPiStompMode()) {
+    try {
+      const res = await fetch(apiUrl("/pedalboard/current"));
+      if (res.ok) {
+        const text = (await res.text()).trim();
+        if (text.length > 0 && !text.startsWith("<")) return text;
+      }
+    } catch {
+      /* optional on some MOD builds */
+    }
+    return null;
+  }
+  return getCurrentFromModLastJson();
+}
+
+export async function resolveCurrentBundle(fallbackBundle: string): Promise<string> {
+  return (await getCurrentPedalboardBundle()) ?? fallbackBundle;
 }
 
 export async function getPedalboardInfo(bundlepath: string): Promise<PedalboardInfo> {
@@ -204,11 +398,18 @@ export async function getPedalboardInfo(bundlepath: string): Promise<PedalboardI
   return info;
 }
 
+/** Loaded bundle + info; resolves current board via MOD API or last.json. */
+export async function getLivePedalboardState(
+  fallbackBundle: string,
+): Promise<{ bundle: string; info: PedalboardInfo }> {
+  const bundle = await resolveCurrentBundle(fallbackBundle);
+  const info = await getPedalboardInfo(bundle);
+  return { bundle, info };
+}
+
 /** Prefer live loaded bundle over disk-only info. */
 export async function getLivePedalboardInfo(fallbackBundle: string): Promise<PedalboardInfo> {
-  const current = await getCurrentPedalboardBundle();
-  const bundle = current ?? fallbackBundle;
-  return getPedalboardInfo(bundle);
+  return (await getLivePedalboardState(fallbackBundle)).info;
 }
 
 interface PluginMeta {
@@ -243,16 +444,12 @@ export async function enrichPluginsWithColors(
   );
 }
 
-export async function setBypass(instance: string, bypassed: boolean): Promise<boolean> {
-  const value = bypassed ? 1 : 0;
-  try {
-    await sendWsParam(instance, ":bypass", value);
-    return true;
-  } catch {
-    /* fall through */
-  }
-
-  const payload = JSON.stringify(`unused/${instance}/:bypass/${value}`);
+async function setParameterViaHttp(
+  instance: string,
+  port: string,
+  value: number,
+): Promise<boolean> {
+  const payload = JSON.stringify(`unused/${instance}/${port}/${value}`);
   const res = await fetch(apiUrl("/effect/parameter/set/"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -261,6 +458,22 @@ export async function setBypass(instance: string, bypassed: boolean): Promise<bo
   if (!res.ok) return false;
   const ok = await res.json();
   return ok === true || ok === "true";
+}
+
+/** Pi-Stomp with real HMI can use HTTP when WebSocket is down; MOD Desktop cannot. */
+function httpParamFallbackEnabled(): boolean {
+  return isPiStompMode();
+}
+
+export async function setBypass(instance: string, bypassed: boolean): Promise<boolean> {
+  const value = bypassed ? 1 : 0;
+  try {
+    await sendWsParam(instance, ":bypass", value);
+    return true;
+  } catch {
+    if (!httpParamFallbackEnabled()) return false;
+    return setParameterViaHttp(instance, ":bypass", value);
+  }
 }
 
 export async function setParameter(
@@ -272,18 +485,9 @@ export async function setParameter(
     await sendWsParam(instance, port, value);
     return true;
   } catch {
-    /* fall through */
+    if (!httpParamFallbackEnabled()) return false;
+    return setParameterViaHttp(instance, port, value);
   }
-
-  const payload = JSON.stringify(`unused/${instance}/${port}/${value}`);
-  const res = await fetch(apiUrl("/effect/parameter/set/"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: payload,
-  });
-  if (!res.ok) return false;
-  const ok = await res.json();
-  return ok === true || ok === "true";
 }
 
 export async function listSnapshots(): Promise<SnapshotsMap> {

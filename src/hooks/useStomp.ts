@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import * as demo from "../api/demo";
 import * as modui from "../api/modui";
+import {
+  getRuntimeMode,
+  isModDesktopMode,
+  setRuntimeMode,
+  type RuntimeMode,
+} from "../lib/runtimeMode";
 import type {
   ConnectionMode,
   EffectPlugin,
@@ -22,6 +28,7 @@ export function useStomp() {
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [runtimeMode, setRuntimeModeState] = useState<RuntimeMode>(getRuntimeMode);
 
   const markDirty = useCallback(() => setDirty(true), []);
 
@@ -33,9 +40,13 @@ export function useStomp() {
         setSnapshots(demo.DEMO_SNAPSHOTS);
         return;
       }
-      const info = await modui.getLivePedalboardInfo(bundle);
-      setBoard(info);
-      setGlobals(modui.extractGlobalControls(info.plugins));
+      const { bundle: resolved, info } = await modui.getLivePedalboardState(bundle);
+      setActiveBundle(resolved);
+      setBoard((prev) => {
+        const plugins = modui.applyPluginsAfterRefresh(prev.plugins, info.plugins);
+        setGlobals(modui.extractGlobalControls(plugins));
+        return { ...info, plugins };
+      });
       try {
         const snaps = await modui.listSnapshots();
         setSnapshots(snaps);
@@ -55,13 +66,16 @@ export function useStomp() {
       }
       await modui.testConnection();
       setMode("live");
-      const list = await modui.listPedalboards();
-      setPedalboards(list.filter((p) => !p.broken));
-      if (list.length > 0 && !list.some((p) => p.bundle === activeBundle)) {
-        setActiveBundle(list[0].bundle);
-        await refreshBoard(list[0].bundle, true);
-      } else if (activeBundle) {
-        await refreshBoard(activeBundle, true);
+      modui.warmWebSocketForLiveSession();
+      const list = await modui.listPedalboards().then((pbs) => pbs.filter((p) => !p.broken));
+      setPedalboards(list);
+      const current = await modui.getCurrentPedalboardBundle();
+      const initial =
+        current ??
+        (list.find((p) => p.bundle === activeBundle)?.bundle ?? list[0]?.bundle);
+      if (initial) {
+        setActiveBundle(initial);
+        await refreshBoard(initial, true);
       }
       setDirty(false);
     } catch (e) {
@@ -86,8 +100,38 @@ export function useStomp() {
       if (activeBundle) void refreshBoard(activeBundle, true);
     };
     const stopWs = modui.connectWebSocket((msg) => {
+      const ev = modui.parseParamSetWsMessage(msg);
+      if (ev?.kind === "bypass") {
+        setBoard((prev) => ({
+          ...prev,
+          plugins: prev.plugins.map((p) =>
+            p.instance === ev.instance ? { ...p, bypassed: ev.bypassed } : p,
+          ),
+        }));
+        return;
+      }
+      if (ev?.kind === "param") {
+        setBoard((prev) => ({
+          ...prev,
+          plugins: prev.plugins.map((p) =>
+            p.instance === ev.instance
+              ? {
+                  ...p,
+                  ports: p.ports.map((pt) =>
+                    pt.symbol === ev.port ? { ...pt, value: ev.value } : pt,
+                  ),
+                }
+              : p,
+          ),
+        }));
+        setGlobals((prev) =>
+          prev.map((g) =>
+            g.instance === ev.instance && g.port === ev.port ? { ...g, value: ev.value } : g,
+          ),
+        );
+        return;
+      }
       if (
-        msg.startsWith("param_set") ||
         msg.includes("load-pb") ||
         msg.includes("snapshot") ||
         msg.includes("pedalboard")
@@ -95,7 +139,8 @@ export function useStomp() {
         onRemoteChange();
       }
     });
-    const poll = window.setInterval(onRemoteChange, 2500);
+    const pollMs = isModDesktopMode() ? 8000 : 2500;
+    const poll = window.setInterval(onRemoteChange, pollMs);
     return () => {
       stopWs();
       window.clearInterval(poll);
@@ -143,9 +188,9 @@ export function useStomp() {
             p.instance === plugin.instance ? { ...p, bypassed: !next } : p,
           ),
         }));
-        setError("Bypass update failed");
-      } else if (activeBundle) {
-        void refreshBoard(activeBundle, true);
+        setError(
+          "Bypass failed — WebSocket could not reach MOD (reload page; keep MOD Desktop running)",
+        );
       }
     }
   };
@@ -167,7 +212,10 @@ export function useStomp() {
     );
     markDirty();
     if (mode === "live") {
-      await modui.setParameter(instance, port, value);
+      const ok = await modui.setParameter(instance, port, value);
+      if (!ok) {
+        setError("Parameter update failed — check WebSocket to MOD (reload; MOD Desktop running)");
+      }
     }
   };
 
@@ -204,7 +252,10 @@ export function useStomp() {
     }));
     markDirty();
     if (mode === "live") {
-      await modui.setParameter(ctrl.instance, ctrl.port, value);
+      const ok = await modui.setParameter(ctrl.instance, ctrl.port, value);
+      if (!ok) {
+        setError("Parameter update failed — check WebSocket to MOD (reload; MOD Desktop running)");
+      }
     }
   };
 
@@ -229,6 +280,13 @@ export function useStomp() {
   const saveHost = (next: string) => {
     modui.setHost(next);
     setHostState(next);
+    void connect();
+  };
+
+  const saveRuntimeMode = (next: RuntimeMode) => {
+    setRuntimeMode(next);
+    setRuntimeModeState(next);
+    modui.resetWebSocketConnection();
     void connect();
   };
 
@@ -258,6 +316,8 @@ export function useStomp() {
     setGlobalValue,
     saveChanges,
     saveHost,
+    saveRuntimeMode,
+    runtimeMode,
     getPlugin,
     clearError: () => setError(null),
   };

@@ -78,8 +78,10 @@ export default function App() {
         open={settingsOpen}
         host={stomp.host}
         mode={stomp.mode}
+        runtimeMode={stomp.runtimeMode}
         onClose={() => setSettingsOpen(false)}
         onSave={stomp.saveHost}
+        onRuntimeModeChange={stomp.saveRuntimeMode}
         onTest={() => void stomp.connect()}
       />
 

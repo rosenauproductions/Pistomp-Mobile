@@ -3,8 +3,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);
+const root = document.getElementById("root")!;
+const app = <App />;
+/* StrictMode double-mounts effects and was opening 3+ WebSockets → MOD ECONNRESET */
+createRoot(root).render(import.meta.env.DEV ? app : <StrictMode>{app}</StrictMode>);
