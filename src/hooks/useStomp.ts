@@ -33,7 +33,7 @@ export function useStomp() {
         setSnapshots(demo.DEMO_SNAPSHOTS);
         return;
       }
-      const info = await modui.getPedalboardInfo(bundle);
+      const info = await modui.getLivePedalboardInfo(bundle);
       setBoard(info);
       setGlobals(modui.extractGlobalControls(info.plugins));
       try {
@@ -50,6 +50,9 @@ export function useStomp() {
     setError(null);
     setBusy(true);
     try {
+      if (modui.fixHostForCurrentOrigin()) {
+        setHostState("");
+      }
       await modui.testConnection();
       setMode("live");
       const list = await modui.listPedalboards();
@@ -79,26 +82,44 @@ export function useStomp() {
 
   useEffect(() => {
     if (mode !== "live") return;
-    return modui.connectWebSocket(() => {
+    const onRemoteChange = () => {
       if (activeBundle) void refreshBoard(activeBundle, true);
+    };
+    const stopWs = modui.connectWebSocket((msg) => {
+      if (
+        msg.startsWith("param_set") ||
+        msg.includes("load-pb") ||
+        msg.includes("snapshot") ||
+        msg.includes("pedalboard")
+      ) {
+        onRemoteChange();
+      }
     });
+    const poll = window.setInterval(onRemoteChange, 2500);
+    return () => {
+      stopWs();
+      window.clearInterval(poll);
+    };
   }, [mode, activeBundle, refreshBoard]);
 
   const selectPedalboard = async (pb: PedalboardSummary) => {
     setBusy(true);
     setError(null);
+    setBoard((prev) => ({ ...prev, title: pb.title, plugins: [] }));
     try {
       if (mode === "live") {
         const ok = await modui.loadPedalboard(pb.bundle);
         if (!ok) throw new Error("Failed to load pedalboard");
+        setActiveBundle(pb.bundle);
         await refreshBoard(pb.bundle, true);
       } else {
         setBoard({ ...demo.DEMO_BOARD, title: pb.title });
       }
-      setActiveBundle(pb.bundle);
+      if (mode !== "live") setActiveBundle(pb.bundle);
       setDirty(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Load failed");
+      if (mode === "live" && activeBundle) await refreshBoard(activeBundle, true);
     } finally {
       setBusy(false);
     }
@@ -123,6 +144,8 @@ export function useStomp() {
           ),
         }));
         setError("Bypass update failed");
+      } else if (activeBundle) {
+        void refreshBoard(activeBundle, true);
       }
     }
   };

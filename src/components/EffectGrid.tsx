@@ -12,7 +12,7 @@ interface Props {
 export function EffectGrid({ plugins, onToggle, onOpenSettings }: Props) {
   return (
     <div className="grid">
-      {plugins.map((plugin) => {
+      {plugins.map((plugin, index) => {
         const active = !plugin.bypassed;
         const vars = effectCardVars(plugin.color, plugin.uri);
         const hasColor = Object.keys(vars).length > 0;
@@ -20,7 +20,7 @@ export function EffectGrid({ plugins, onToggle, onOpenSettings }: Props) {
 
         return (
           <article
-            key={plugin.instance}
+            key={`${plugin.instance}-${index}`}
             className={`effect ${hasColor ? "has-color" : ""}`}
             style={style}
           >

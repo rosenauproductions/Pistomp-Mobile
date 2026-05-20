@@ -18,10 +18,35 @@ export function setHost(host: string): void {
   localStorage.setItem(HOST_KEY, host.trim().replace(/\/$/, ""));
 }
 
+/** Wrong host (e.g. :80 while page is on :8080) breaks control — use same origin. */
+export function fixHostForCurrentOrigin(): boolean {
+  const host = getHost();
+  if (!host) return false;
+  try {
+    if (new URL(host).origin !== window.location.origin) {
+      localStorage.removeItem(HOST_KEY);
+      return true;
+    }
+  } catch {
+    localStorage.removeItem(HOST_KEY);
+    return true;
+  }
+  return false;
+}
+
 function apiUrl(path: string): string {
   const base = getHost().replace(/\/$/, "");
   const p = path.startsWith("/") ? path : `/${path}`;
   return base ? `${base}${p}` : p;
+}
+
+function wsUrl(): string {
+  const host = getHost();
+  if (host) {
+    return `${host.replace(/^http/, "ws").replace(/\/$/, "")}/websocket`;
+  }
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${proto}//${window.location.host}/websocket`;
 }
 
 async function request<T>(
@@ -47,8 +72,91 @@ async function request<T>(
   }
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// --- WebSocket (MOD uses this for bypass via host.bypass, not HTTP paramhmi_set) ---
+
+type WSListener = (message: string) => void;
+
+let ws: WebSocket | null = null;
+let wsConnectPromise: Promise<WebSocket> | null = null;
+const wsListeners = new Set<WSListener>();
+
+function attachSocket(socket: WebSocket): void {
+  socket.onmessage = (ev) => {
+    const msg = String(ev.data);
+    for (const fn of wsListeners) fn(msg);
+  };
+  socket.onclose = () => {
+    ws = null;
+    wsConnectPromise = null;
+  };
+}
+
+function ensureWebSocket(): Promise<WebSocket> {
+  if (ws?.readyState === WebSocket.OPEN) return Promise.resolve(ws);
+  if (wsConnectPromise) return wsConnectPromise;
+
+  wsConnectPromise = new Promise((resolve, reject) => {
+    try {
+      const socket = new WebSocket(wsUrl());
+      ws = socket;
+      socket.onopen = () => {
+        attachSocket(socket);
+        resolve(socket);
+      };
+      socket.onerror = () => reject(new Error("WebSocket failed"));
+      socket.onclose = () => {
+        ws = null;
+        wsConnectPromise = null;
+      };
+    } catch (e) {
+      reject(e);
+    }
+  });
+
+  return wsConnectPromise;
+}
+
+function sendWsParam(instance: string, portSymbol: string, value: number): Promise<void> {
+  return ensureWebSocket().then((socket) => {
+    socket.send(`param_set ${instance}/${portSymbol} ${value}`);
+  });
+}
+
+export function connectWebSocket(onMessage: WSListener): () => void {
+  wsListeners.add(onMessage);
+  void ensureWebSocket().catch(() => {
+    /* retry on next action */
+  });
+
+  const retryTimer = window.setInterval(() => {
+    if (ws?.readyState === WebSocket.OPEN) return;
+    wsConnectPromise = null;
+    void ensureWebSocket().catch(() => undefined);
+  }, 4000);
+
+  return () => {
+    wsListeners.delete(onMessage);
+    window.clearInterval(retryTimer);
+    if (wsListeners.size === 0) {
+      ws?.close();
+      ws = null;
+      wsConnectPromise = null;
+    }
+  };
+}
+
 export async function testConnection(): Promise<boolean> {
+  fixHostForCurrentOrigin();
   await request<PedalboardSummary[]>("/pedalboard/list");
+  try {
+    await ensureWebSocket();
+  } catch {
+    /* WS optional for list; required for reliable bypass */
+  }
   return true;
 }
 
@@ -56,7 +164,14 @@ export async function listPedalboards(): Promise<PedalboardSummary[]> {
   return request<PedalboardSummary[]>("/pedalboard/list");
 }
 
+/** MOD expects /reset before load_bundle (see modep-ctrl) or plugins can stack. */
+export async function resetSession(): Promise<void> {
+  const res = await fetch(apiUrl("/reset/"));
+  if (!res.ok) throw new Error(`reset failed: ${res.status}`);
+}
+
 export async function loadPedalboard(bundlepath: string): Promise<boolean> {
+  await resetSession();
   const body = new FormData();
   body.append("bundlepath", bundlepath);
   const res = await fetch(apiUrl("/pedalboard/load_bundle/"), {
@@ -65,7 +180,21 @@ export async function loadPedalboard(bundlepath: string): Promise<boolean> {
   });
   if (!res.ok) return false;
   const data = (await res.json()) as { ok?: boolean };
-  return Boolean(data.ok);
+  if (!data.ok) return false;
+  await delay(450);
+  return true;
+}
+
+/** Currently loaded pedalboard bundle path (plain text), if supported. */
+export async function getCurrentPedalboardBundle(): Promise<string | null> {
+  try {
+    const res = await fetch(apiUrl("/pedalboard/current"));
+    if (!res.ok) return null;
+    const text = (await res.text()).trim();
+    return text.length > 0 ? text : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function getPedalboardInfo(bundlepath: string): Promise<PedalboardInfo> {
@@ -73,6 +202,13 @@ export async function getPedalboardInfo(bundlepath: string): Promise<PedalboardI
   const info = await request<PedalboardInfo>(`/pedalboard/info/?${q}`);
   info.plugins = await enrichPluginsWithColors(info.plugins);
   return info;
+}
+
+/** Prefer live loaded bundle over disk-only info. */
+export async function getLivePedalboardInfo(fallbackBundle: string): Promise<PedalboardInfo> {
+  const current = await getCurrentPedalboardBundle();
+  const bundle = current ?? fallbackBundle;
+  return getPedalboardInfo(bundle);
 }
 
 interface PluginMeta {
@@ -108,7 +244,15 @@ export async function enrichPluginsWithColors(
 }
 
 export async function setBypass(instance: string, bypassed: boolean): Promise<boolean> {
-  const payload = JSON.stringify(`unused/${instance}/:bypass/${bypassed ? 1 : 0}`);
+  const value = bypassed ? 1 : 0;
+  try {
+    await sendWsParam(instance, ":bypass", value);
+    return true;
+  } catch {
+    /* fall through */
+  }
+
+  const payload = JSON.stringify(`unused/${instance}/:bypass/${value}`);
   const res = await fetch(apiUrl("/effect/parameter/set/"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -124,6 +268,13 @@ export async function setParameter(
   port: string,
   value: number,
 ): Promise<boolean> {
+  try {
+    await sendWsParam(instance, port, value);
+    return true;
+  } catch {
+    /* fall through */
+  }
+
   const payload = JSON.stringify(`unused/${instance}/${port}/${value}`);
   const res = await fetch(apiUrl("/effect/parameter/set/"), {
     method: "POST",
@@ -156,7 +307,6 @@ export async function saveSnapshot(): Promise<boolean> {
   return ok === true || ok === "true";
 }
 
-/** Ports exposed in the per-effect settings sheet (not bypass/preset meta). */
 export function getEditablePorts(ports: EffectPlugin["ports"]): EffectPlugin["ports"] {
   return ports.filter(
     (p) =>
@@ -232,49 +382,6 @@ function isTunerPlugin(p: EffectPlugin): boolean {
     /tun/i.test(p.uri ?? "") ||
     /tun/i.test(p.title ?? "")
   );
-}
-
-export function connectWebSocket(onReload: () => void): () => void {
-  let ws: WebSocket | null = null;
-  let closed = false;
-
-  const wsUrl = (): string => {
-    const host = getHost();
-    if (host) {
-      return `${host.replace(/^http/, "ws").replace(/\/$/, "")}/websocket`;
-    }
-    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-    return `${proto}//${window.location.host}/websocket`;
-  };
-
-  const open = () => {
-    if (closed) return;
-    try {
-      ws = new WebSocket(wsUrl());
-      ws.onmessage = (ev) => {
-        const msg = String(ev.data);
-        if (
-          msg.includes("load-pb") ||
-          msg.includes("bypass") ||
-          msg.includes("snapshot") ||
-          msg.includes("param")
-        ) {
-          onReload();
-        }
-      };
-      ws.onclose = () => {
-        if (!closed) setTimeout(open, 3000);
-      };
-    } catch {
-      setTimeout(open, 3000);
-    }
-  };
-
-  open();
-  return () => {
-    closed = true;
-    ws?.close();
-  };
 }
 
 export type { ConnectionMode };

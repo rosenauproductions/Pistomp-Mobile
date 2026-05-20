@@ -297,7 +297,19 @@ sudo systemctl reload nginx
 ### Save or bypass does nothing
 
 - Must be **LIVE** mode, not DEMO.
+- In settings (gear), **clear the Host URL** so requests stay on `:8080` (same origin). A host of `http://172.24.1.1` (port 80) while the page is on `:8080` will not control MOD correctly.
+- Bypass uses the MOD **WebSocket** (`/websocket`); reinstall or reload nginx after updating so `/reset/` and WebSocket proxy are present.
 - Check MOD-UI: `sudo journalctl -u mod-ui -f` while toggling an effect.
+
+### Pedalboards stack / duplicate effects in the mobile UI
+
+- Fixed in current app by calling **`GET /reset/`** before each pedalboard load (same as MOD’s modep tools).
+- Rebuild, redeploy `dist/`, and run `sudo bash install-on-pistomp.sh` again.
+
+### Changes on pistomp.local do not update :8080 immediately
+
+- The app listens on WebSocket `param_set` messages and polls every ~2.5s.
+- Reload the mobile page after updating nginx if WebSocket was not proxied before.
 
 ### WebSocket / footswitch sync lag
 
