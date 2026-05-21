@@ -3,6 +3,12 @@ import {
   isPiStompMode,
   RUNTIME_MODE_HEADER,
 } from "../lib/runtimeMode";
+import {
+  enrichPluginPortRanges,
+  findNativeBypassPort,
+  nativeBypassValueForTarget,
+  normalizePluginPorts,
+} from "./portUtils";
 import type {
   ConnectionMode,
   EffectPlugin,
@@ -18,10 +24,61 @@ function normalizeWsInstance(raw: string): string {
   return s.startsWith("/graph/") ? s.slice("/graph/".length) : s;
 }
 
-/** MOD-UI WebSocket port path (pi-stomp bridge uses /graph/…). */
-function wsPortPath(instance: string, port: string): string {
-  const base = instance.startsWith("/graph/") ? instance : `/graph/${instance}`;
-  return `${base}/${port}`;
+function instanceKey(raw: string): string {
+  return normalizeWsInstance(raw).replace(/^\//, "").toLowerCase();
+}
+
+/** Match pedalboard/info `instance` to WS `/graph/…` paths. */
+export function instanceIdsMatch(a: string, b: string): boolean {
+  return instanceKey(a) === instanceKey(b);
+}
+
+const bypassEchoSuppress = new Map<string, { until: number; bypassed: boolean }>();
+
+export function noteBypassCommand(instance: string, bypassed: boolean): void {
+  bypassEchoSuppress.set(instanceKey(instance), {
+    until: Date.now() + 1200,
+    bypassed,
+  });
+}
+
+function shouldApplyInboundBypass(instance: string, bypassed: boolean): boolean {
+  const pending = bypassEchoSuppress.get(instanceKey(instance));
+  if (!pending || Date.now() > pending.until) return true;
+  if (pending.bypassed === bypassed) {
+    bypassEchoSuppress.delete(instanceKey(instance));
+    return true;
+  }
+  return false;
+}
+
+/** Avoid full disk refresh on unrelated WS traffic (e.g. paths containing "pedalboard"). */
+export function shouldReloadBoardFromWs(msg: string): boolean {
+  const t = msg.trim();
+  return (
+    t.startsWith("load-pb") ||
+    t.startsWith("reload-pb") ||
+    t.startsWith("snapshot/load") ||
+    t.startsWith("snapshot-save")
+  );
+}
+
+/** Pi-Stomp pi_stomp_set URLs use //graph{instance_id}/… where instance_id is e.g. /CollisionDrive. */
+function piStompInstanceSuffix(instance: string): string {
+  const s = instance.trim();
+  if (s.startsWith("/graph/")) return s.slice("/graph".length);
+  return s.startsWith("/") ? s : `/${s}`;
+}
+
+function piStompSetPaths(instance: string, port: string): string[] {
+  const suffix = piStompInstanceSuffix(instance);
+  const sym = port.startsWith(":") ? port : port.replace(/^\//, "");
+  const base = `/effect/parameter/pi_stomp_set`;
+  return [
+    `${base}//graph${suffix}/${sym}`,
+    `${base}/graph${suffix}/${sym}`,
+    `${base}//graph${suffix}/${port}`,
+  ];
 }
 
 const HOST_KEY = "pistomp-mobile-host";
@@ -80,6 +137,21 @@ export function isWebSocketOpen(): boolean {
   return ws?.readyState === WebSocket.OPEN;
 }
 
+type WsStatusListener = (open: boolean) => void;
+const wsStatusListeners = new Set<WsStatusListener>();
+
+function notifyWebSocketStatus(): void {
+  const open = isWebSocketOpen();
+  for (const fn of wsStatusListeners) fn(open);
+}
+
+/** Subscribe to MOD WebSocket open/close (for connection indicator). */
+export function onWebSocketStatus(listener: WsStatusListener): () => void {
+  wsStatusListeners.add(listener);
+  listener(isWebSocketOpen());
+  return () => wsStatusListeners.delete(listener);
+}
+
 /** Opens MOD WebSocket on first stomp/param — not at page load (avoids Vite ECONNRESET spam). */
 function primeWebSocketForControl(): void {
   if (wsWarmAttempted && ws?.readyState === WebSocket.OPEN) return;
@@ -92,6 +164,65 @@ function primeWebSocketForControl(): void {
 /** Call when entering live mode so MOD Desktop changes stream in before the first tap. */
 export function warmWebSocketForLiveSession(): void {
   primeWebSocketForControl();
+}
+
+/** Await MOD WebSocket (Pi needs this before controls work). */
+export async function ensureWebSocketReady(): Promise<boolean> {
+  try {
+    await ensureWebSocket();
+    return true;
+  } catch (e) {
+    pushControlLog(`WebSocket connect failed: ${e instanceof Error ? e.message : String(e)}`);
+    wsWarmAttempted = false;
+    return false;
+  }
+}
+
+/**
+ * Pi `/pedalboard/current` is often empty even when the UI bundle exists on disk.
+ * Always reset+load so MOD host graph matches the app (avoids pi_stomp_set 500 / dead controls).
+ */
+export async function syncHostPedalboard(bundlepath: string): Promise<boolean> {
+  if (!bundlepath) return false;
+  pushControlLog(`sync host load_bundle ${bundlepath}`);
+  return loadPedalboard(bundlepath);
+}
+
+/** Quick check: host graph has at least one plugin (pi_stomp_set works). */
+export async function probeHostGraphReady(instance: string, port: string): Promise<boolean> {
+  const paths = piStompSetPaths(instance, port);
+  for (const path of paths.slice(0, 1)) {
+    try {
+      const res = await fetch(apiUrl(path), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: 0 }),
+      });
+      if (res.ok) {
+        const text = (await res.text()).trim();
+        if (text === "true" || text === "True") return true;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return false;
+}
+
+/**
+ * Stomp: MOD host :bypass first (same as early 0.2.x — reliable on Pi-Stomp),
+ * then native BYPASS/bypass/enable for plugins that mirror it (e.g. CollisionDrive, Calf).
+ */
+export async function setPluginBypass(plugin: EffectPlugin, bypassed: boolean): Promise<boolean> {
+  noteBypassCommand(plugin.instance, bypassed);
+  pushControlLog(`stomp ${plugin.instance} :bypass=${bypassed ? 1 : 0}`);
+  const hostOk = await setBypass(plugin.instance, bypassed);
+  const native = findNativeBypassPort(plugin);
+  if (!native) return hostOk;
+  const value = nativeBypassValueForTarget(plugin, native, bypassed);
+  pushControlLog(`stomp ${plugin.instance}/${native}=${value}`);
+  const nativeOk = await setParameter(plugin.instance, native, value);
+  return hostOk || nativeOk;
 }
 
 export type ParamSetWsEvent =
@@ -249,16 +380,183 @@ type WSListener = (message: string) => void;
 let ws: WebSocket | null = null;
 let wsConnectPromise: Promise<WebSocket> | null = null;
 let wsWarmAttempted = false;
+let wsLastClose = "(never connected)";
 const wsListeners = new Set<WSListener>();
+
+/** Ports that duplicate the stomp (host bypass) or are gate-on/off, not tone knobs. */
+const DUPLICATE_STOMP_PORTS = /^(gate|bypass|enable|onoff|on_off|mute)$/i;
+
+const controlLog: string[] = [];
+const wsInLog: string[] = [];
+const MAX_LOG = 48;
+
+export function pushControlLog(message: string): void {
+  const row = `${new Date().toISOString().slice(11, 23)} ${message}`;
+  controlLog.push(row);
+  if (controlLog.length > MAX_LOG) controlLog.shift();
+}
+
+export function getControlLog(): string[] {
+  return [...controlLog];
+}
+
+function pushWsInLog(message: string): void {
+  if (message === "pong") return;
+  const row = `${new Date().toISOString().slice(11, 23)} ← ${message.slice(0, 120)}`;
+  wsInLog.push(row);
+  if (wsInLog.length > MAX_LOG) wsInLog.shift();
+}
+
+export function getWebSocketDiagnostics(): string[] {
+  const state = ws?.readyState;
+  const stateLabel =
+    state === WebSocket.OPEN
+      ? "OPEN"
+      : state === WebSocket.CONNECTING
+        ? "CONNECTING"
+        : state === WebSocket.CLOSING
+          ? "CLOSING"
+          : state === WebSocket.CLOSED
+            ? "CLOSED"
+            : "null";
+  return [
+    `  socket: ${stateLabel}`,
+    `  last close: ${wsLastClose}`,
+    `  ws warmed: ${wsWarmAttempted}`,
+    `  listener count: ${wsListeners.size}`,
+    `  recent inbound (last ${wsInLog.length}):`,
+    ...(wsInLog.length ? wsInLog.map((l) => `    ${l}`) : ["    (none yet)"]),
+  ];
+}
+
+export function formatWsParamLine(instance: string, port: string, value: number): string {
+  return wsParamMessage(instance, port, value);
+}
+
+async function fetchProbe(path: string, init?: RequestInit): Promise<string> {
+  try {
+    const res = await fetch(apiUrl(path), { ...init, signal: AbortSignal.timeout(5000) });
+    const text = (await res.text()).trim().replace(/\s+/g, " ").slice(0, 160);
+    return `  ${path} → HTTP ${res.status} ${text || "(empty)"}`;
+  } catch (e) {
+    return `  ${path} → ERROR ${e instanceof Error ? e.message : String(e)}`;
+  }
+}
+
+async function probePiStompSet(
+  instance: string,
+  port: string,
+  value: number,
+): Promise<string[]> {
+  const lines: string[] = [];
+  for (const path of piStompSetPaths(instance, port)) {
+    const bodies =
+      port === ":bypass"
+        ? [{ value: value >= 0.5 ? "1" : "0" }, { value }]
+        : [{ value }];
+    for (const body of bodies) {
+      try {
+        const res = await fetch(apiUrl(path), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(5000),
+        });
+        const text = (await res.text()).trim().slice(0, 80);
+        lines.push(`  POST ${path} body=${JSON.stringify(body)} → ${res.status} ${text}`);
+      } catch (e) {
+        lines.push(`  POST ${path} → ERROR ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+  }
+  return lines;
+}
+
+/** Safe HTTP probes for Settings QA (never calls /reset — that wipes the live graph). */
+export async function runConnectionProbes(
+  plugin: EffectPlugin | undefined,
+): Promise<string[]> {
+  const lines: string[] = [];
+  lines.push("  (skipped GET /reset/ — destructive; clears all effects on the Pi)");
+  lines.push(await fetchProbe("/pedalboard/current"));
+  lines.push(await fetchProbe("/pistomp-last.json"));
+  lines.push(await fetchProbe("/pistomp/audio/controls"));
+
+  if (!plugin) {
+    lines.push("  (no plugin — load a pedalboard first)");
+    return lines;
+  }
+
+  const tonePort =
+    plugin.ports.find(
+      (p) =>
+        p.valid !== false &&
+        !p.symbol.startsWith(":") &&
+        !DUPLICATE_STOMP_PORTS.test(p.symbol),
+    ) ?? plugin.ports[0];
+
+  lines.push(`  probe plugin: instance="${plugin.instance}"`);
+  const nativeBypass = findNativeBypassPort(plugin);
+  if (nativeBypass) {
+    lines.push(`  native bypass port: ${nativeBypass} (stomp should use this, not GATE)`);
+    lines.push(
+      `  WS line (native bypass): ${formatWsParamLine(plugin.instance, nativeBypass, 1)}`,
+    );
+  }
+  lines.push(`  WS line (host :bypass): ${formatWsParamLine(plugin.instance, ":bypass", 1)}`);
+  if (tonePort) {
+    lines.push(
+      `  WS line (param): ${formatWsParamLine(plugin.instance, tonePort.symbol, tonePort.value)}`,
+    );
+  }
+
+  lines.push("  pi_stomp_set bypass probes:");
+  lines.push(...(await probePiStompSet(plugin.instance, ":bypass", plugin.bypassed ? 0 : 1)));
+
+  if (tonePort) {
+    const testVal = Math.min(tonePort.maximum ?? 1, Math.max(tonePort.minimum ?? 0, tonePort.value));
+    lines.push(`  pi_stomp_set param "${tonePort.symbol}" probe:`);
+    lines.push(...(await probePiStompSet(plugin.instance, tonePort.symbol, testVal)));
+  }
+
+  const getPath = `/effect/parameter/pi_stomp_get//graph${piStompInstanceSuffix(plugin.instance)}/:bypass`;
+  lines.push(await fetchProbe(getPath));
+
+  return lines;
+}
+
+/**
+ * MOD-UI expects clients to answer keepalive / handshake traffic.
+ * @see pi-stomp modalapi/websocket_bridge.py (_receive_messages)
+ */
+function handleModWsProtocol(socket: WebSocket, msg: string): boolean {
+  if (msg === "ping") {
+    socket.send("pong");
+    return true;
+  }
+  if (msg.startsWith("data_ready ")) {
+    socket.send(msg);
+    return true;
+  }
+  return false;
+}
 
 function attachSocket(socket: WebSocket): void {
   socket.onmessage = (ev) => {
     const msg = String(ev.data);
+    if (handleModWsProtocol(socket, msg)) {
+      if (msg !== "ping") pushWsInLog(`(echo) ${msg}`);
+      return;
+    }
+    pushWsInLog(msg);
     for (const fn of wsListeners) fn(msg);
   };
-  socket.onclose = () => {
+  socket.onclose = (ev) => {
+    wsLastClose = `code=${ev.code} reason=${ev.reason || "(none)"}`;
+    pushControlLog(`WebSocket closed ${wsLastClose}`);
     ws = null;
     wsConnectPromise = null;
+    notifyWebSocketStatus();
   };
 }
 
@@ -279,6 +577,8 @@ function connectWebSocketOnce(url: string): Promise<WebSocket> {
       window.clearTimeout(timer);
       ws = socket;
       attachSocket(socket);
+      pushControlLog(`WebSocket open ${url}`);
+      notifyWebSocketStatus();
       resolve(socket);
     };
     socket.onerror = fail;
@@ -317,11 +617,32 @@ function ensureWebSocket(): Promise<WebSocket> {
   return wsConnectPromise;
 }
 
-function sendWsParam(instance: string, portSymbol: string, value: number): Promise<void> {
-  const port = wsPortPath(instance, portSymbol);
-  return ensureWebSocket().then((socket) => {
-    socket.send(`param_set ${port} ${value}`);
-  });
+/** Outbound WS — pi-stomp bridge uses a single slash path (see websocket_bridge.send_parameter). */
+export function wsParamMessage(instance: string, portSymbol: string, value: number): string {
+  const bare = normalizeWsInstance(instance).replace(/^\//, "");
+  const sym = portSymbol.startsWith(":") ? portSymbol : portSymbol.replace(/^\//, "");
+  return `param_set /graph/${bare}/${sym} ${value}`;
+}
+
+async function sendWsParam(instance: string, portSymbol: string, value: number): Promise<void> {
+  const socket = await ensureWebSocket();
+  const line = wsParamMessage(instance, portSymbol, value);
+  pushControlLog(`WS → ${line}`);
+  socket.send(line);
+}
+
+async function tryWebSocketParam(
+  instance: string,
+  port: string,
+  value: number,
+): Promise<boolean> {
+  try {
+    await sendWsParam(instance, port, value);
+    return true;
+  } catch (e) {
+    pushControlLog(`WS failed ${instance}/${port}: ${e instanceof Error ? e.message : String(e)}`);
+    return false;
+  }
 }
 
 export function connectWebSocket(onMessage: WSListener): () => void {
@@ -384,7 +705,7 @@ export async function loadPedalboard(bundlepath: string): Promise<boolean> {
   if (!res.ok) return false;
   const data = (await res.json()) as { ok?: boolean };
   if (!data.ok) return false;
-  await delay(isPiStompMode() ? 900 : 450);
+  await delay(isPiStompMode() ? 1200 : 450);
   return true;
 }
 
@@ -436,20 +757,43 @@ export async function resolveCurrentBundle(fallbackBundle: string): Promise<stri
   return (await getCurrentPedalboardBundle()) ?? fallbackBundle;
 }
 
+async function fetchEffectGetMeta(uri: string): Promise<unknown> {
+  const q = new URLSearchParams({ uri });
+  return request<unknown>(`/effect/get?${q}`);
+}
+
 export async function getPedalboardInfo(bundlepath: string): Promise<PedalboardInfo> {
   const q = new URLSearchParams({ bundlepath });
   const info = await request<PedalboardInfo>(`/pedalboard/info/?${q}`);
+  info.plugins = info.plugins.map((p) => normalizePluginPorts(p));
   info.plugins = await enrichPluginsWithColors(info.plugins);
+  info.plugins = await enrichPluginPortRanges(info.plugins, fetchEffectGetMeta);
   return info;
 }
 
-/** Loaded bundle + info; resolves current board via MOD API or last.json. */
+/** Pi load_bundle can lag; retry before showing an empty grid. */
+export async function getPedalboardInfoWithRetry(
+  bundlepath: string,
+  attempts = 5,
+): Promise<PedalboardInfo> {
+  let last = await getPedalboardInfo(bundlepath);
+  if (!isPiStompMode() || last.plugins.length > 0) return last;
+  for (let i = 1; i < attempts; i++) {
+    await delay(350);
+    last = await getPedalboardInfo(bundlepath);
+    if (last.plugins.length > 0) return last;
+  }
+  return last;
+}
+
+/** Pedalboard info for the bundle you asked for (not /pedalboard/current, which is often empty on Pi). */
 export async function getLivePedalboardState(
-  fallbackBundle: string,
+  bundlepath: string,
 ): Promise<{ bundle: string; info: PedalboardInfo }> {
-  const bundle = await resolveCurrentBundle(fallbackBundle);
-  const info = await getPedalboardInfo(bundle);
-  return { bundle, info };
+  const info = isPiStompMode()
+    ? await getPedalboardInfoWithRetry(bundlepath)
+    : await getPedalboardInfo(bundlepath);
+  return { bundle: bundlepath, info };
 }
 
 /** Prefer live loaded bundle over disk-only info. */
@@ -509,18 +853,11 @@ async function setParameterViaHttp(
  * Pi-Stomp MOD patch: direct host param_set / bypass (same as pi-stomp LCD/footswitches).
  * @see pi-stomp/GUIDE.md — POST /effect/parameter/pi_stomp_set//graph{id}/{symbol}
  */
-async function setParameterViaPiStomp(
-  instance: string,
-  port: string,
-  value: number,
-): Promise<boolean> {
-  const instPath = instance.startsWith("/") ? instance : `/${instance}`;
-  /* Do not encode ":" in :bypass — MOD route expects literal :bypass */
-  const path = `/effect/parameter/pi_stomp_set//graph${instPath}/${port}`;
+async function postPiStompSetOnce(path: string, body: { value: number | string }): Promise<boolean> {
   const res = await fetch(apiUrl(path), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ value }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) return false;
   const text = (await res.text()).trim();
@@ -534,10 +871,59 @@ async function setParameterViaPiStomp(
   }
 }
 
+async function postPiStompSet(path: string, value: number, port: string): Promise<boolean> {
+  const bodies: { value: number | string }[] = [{ value }];
+  if (port === ":bypass") {
+    bodies.unshift({ value: value >= 0.5 ? "1" : "0" });
+  }
+  for (const body of bodies) {
+    if (await postPiStompSetOnce(path, body)) return true;
+  }
+  return false;
+}
+
+async function setParameterViaPiStomp(
+  instance: string,
+  port: string,
+  value: number,
+): Promise<boolean> {
+  const paths = [...new Set(piStompSetPaths(instance, port))];
+  for (const path of paths) {
+    if (await postPiStompSet(path, value, port)) return true;
+  }
+  return false;
+}
+
+/** Pi-Stomp: WS when connected (live engine), then HTTP paramhmi_set, then pi_stomp_set. */
+async function setParameterOnPi(instance: string, port: string, value: number): Promise<boolean> {
+  pushControlLog(`set param ${instance}/${port}=${value}`);
+  if (isWebSocketOpen()) {
+    if (await tryWebSocketParam(instance, port, value)) return true;
+  }
+  if (await setParameterViaHttp(instance, port, value)) {
+    pushControlLog(`HTTP set ${instance}/${port} → true`);
+    return true;
+  }
+  return setParameterViaPiStomp(instance, port, value);
+}
+
+async function setBypassOnPi(instance: string, value: number): Promise<boolean> {
+  pushControlLog(`set host bypass ${instance}=${value}`);
+  if (isWebSocketOpen()) {
+    if (await tryWebSocketParam(instance, ":bypass", value)) return true;
+  }
+  if (await setParameterViaHttp(instance, ":bypass", value)) {
+    pushControlLog(`HTTP bypass ${instance} → true`);
+    return true;
+  }
+  return setParameterViaPiStomp(instance, ":bypass", value);
+}
+
 export async function setBypass(instance: string, bypassed: boolean): Promise<boolean> {
   const value = bypassed ? 1 : 0;
   if (isPiStompMode()) {
-    if (await setParameterViaPiStomp(instance, ":bypass", value)) return true;
+    noteBypassCommand(instance, bypassed);
+    return setBypassOnPi(instance, value);
   }
   try {
     await sendWsParam(instance, ":bypass", value);
@@ -556,7 +942,7 @@ export async function setParameter(
   value: number,
 ): Promise<boolean> {
   if (isPiStompMode()) {
-    if (await setParameterViaPiStomp(instance, port, value)) return true;
+    return setParameterOnPi(instance, port, value);
   }
   try {
     await sendWsParam(instance, port, value);
@@ -595,8 +981,25 @@ export function getEditablePorts(ports: EffectPlugin["ports"]): EffectPlugin["po
     (p) =>
       p.valid !== false &&
       p.symbol.length > 0 &&
-      !p.symbol.startsWith(":"),
+      !p.symbol.startsWith(":") &&
+      !DUPLICATE_STOMP_PORTS.test(p.symbol),
   );
+}
+
+/** Apply inbound bypass from MOD WebSocket if it matches a plugin and is not a stale echo. */
+export function applyInboundBypass(
+  plugins: EffectPlugin[],
+  instance: string,
+  bypassed: boolean,
+): EffectPlugin[] | null {
+  if (!shouldApplyInboundBypass(instance, bypassed)) return null;
+  let matched = false;
+  const next = plugins.map((p) => {
+    if (!instanceIdsMatch(p.instance, instance)) return p;
+    matched = true;
+    return { ...p, bypassed };
+  });
+  return matched ? next : null;
 }
 
 export async function loadSnapshot(id: number): Promise<boolean> {

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { EffectGrid } from "./components/EffectGrid";
 import { EffectSettingsSheet } from "./components/EffectSettingsSheet";
 import { GlobalControls } from "./components/GlobalControls";
+import { HardwareInputControls } from "./components/HardwareInputControls";
 import { Header } from "./components/Header";
 import { PedalboardSheet } from "./components/PedalboardSheet";
 import { SettingsSheet } from "./components/SettingsSheet";
@@ -27,6 +28,7 @@ export default function App() {
       <Header
         title={stomp.board.title}
         mode={stomp.mode}
+        connectionBroken={stomp.connectionBroken}
         dirty={stomp.dirty}
         saving={stomp.busy}
         onSave={() => void stomp.saveChanges()}
@@ -35,6 +37,14 @@ export default function App() {
       />
 
       <main className="main">
+        {stomp.boardEmptyWarning && (
+          <div className="board-warning" role="alert">
+            <strong>Empty pedalboard.</strong> MOD returned no effects for this board. Use{" "}
+            <em>Change pedalboard</em> to pick it again, or reload the page. Opening Settings no
+            longer wipes the Pi graph (fixed in 0.2.6).
+          </div>
+        )}
+
         {stomp.dirty && stomp.mode === "demo" && (
           <p className="demo-save-hint">Demo mode — Save clears the unsaved indicator only.</p>
         )}
@@ -49,6 +59,13 @@ export default function App() {
           activeId={stomp.activeSnapshot}
           onSelect={(id) => void stomp.loadSnapshot(id)}
         />
+
+        {stomp.hardwareInput && (
+          <HardwareInputControls
+            state={stomp.hardwareInput}
+            onChange={(v) => void stomp.setHardwareInputValue(v)}
+          />
+        )}
 
         <GlobalControls controls={stomp.globals} onChange={(c, v) => void stomp.setGlobalValue(c, v)} />
 
@@ -79,10 +96,13 @@ export default function App() {
         host={stomp.host}
         mode={stomp.mode}
         runtimeMode={stomp.runtimeMode}
+        hardwareInput={stomp.hardwareInput}
         onClose={() => setSettingsOpen(false)}
         onSave={stomp.saveHost}
         onRuntimeModeChange={stomp.saveRuntimeMode}
+        onHardwareControlChange={(name) => void stomp.setHardwareInputControl(name)}
         onTest={() => void stomp.connect()}
+        onCollectQa={stomp.collectQa}
       />
 
       <EffectSettingsSheet

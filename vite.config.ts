@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
+import pkg from "./package.json";
 
 /** Pi MOD-UI :80; MOD Desktop (emulator) :18181 — override via MOD_API_TARGET */
 const modApi = process.env.MOD_API_TARGET ?? "http://127.0.0.1:80";
@@ -36,9 +37,15 @@ function modLastJsonPlugin(): Plugin {
   };
 }
 
+const buildId = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "").slice(0, 12);
+
 export default defineConfig({
   plugins: [react(), modLastJsonPlugin()],
   base: "/",
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+    __BUILD_ID__: JSON.stringify(buildId),
+  },
   server: {
     port: 5173,
     proxy: {
@@ -46,6 +53,11 @@ export default defineConfig({
       "/pedalboard": { target: modApi, changeOrigin: true },
       "/effect": { target: modApi, changeOrigin: true },
       "/snapshot": { target: modApi, changeOrigin: true },
+      "/pistomp/audio": {
+        target: "http://127.0.0.1:8766",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/pistomp\/audio/, ""),
+      },
       "/websocket": {
         target: modApi,
         ws: true,

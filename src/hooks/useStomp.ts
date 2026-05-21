@@ -2,8 +2,18 @@ import { useCallback, useEffect, useState } from "react";
 import * as demo from "../api/demo";
 import * as modui from "../api/modui";
 import {
+  bypassedFromNativePortValue,
+  findNativeBypassPort,
+  isNativeBypassPortSymbol,
+  nativeBypassValueForTarget,
+} from "../api/portUtils";
+import * as pistompAudio from "../api/pistompAudio";
+import type { HardwareInputState } from "../api/pistompAudio";
+import { collectQaReport } from "../lib/diagnostics";
+import {
   getRuntimeMode,
   isModDesktopMode,
+  isPiStompMode,
   setRuntimeMode,
   type RuntimeMode,
 } from "../lib/runtimeMode";
@@ -29,8 +39,16 @@ export function useStomp() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [runtimeMode, setRuntimeModeState] = useState<RuntimeMode>(getRuntimeMode);
+  const [hardwareInput, setHardwareInput] = useState<HardwareInputState | null>(null);
+  const [wsConnected, setWsConnected] = useState(false);
+  const [connectAttempted, setConnectAttempted] = useState(false);
 
   const markDirty = useCallback(() => setDirty(true), []);
+
+  const refreshHardwareInput = useCallback(async (controlName?: string) => {
+    const state = await pistompAudio.loadHardwareInputState(controlName);
+    setHardwareInput(state);
+  }, []);
 
   const refreshBoard = useCallback(
     async (bundle: string, live: boolean, opts?: { replacePlugins?: boolean }) => {
@@ -42,6 +60,9 @@ export function useStomp() {
       }
       const { bundle: resolved, info } = await modui.getLivePedalboardState(bundle);
       setActiveBundle(resolved);
+      if (opts?.replacePlugins && info.plugins.length === 0) {
+        throw new Error("Pedalboard has no effects yet — try Change pedalboard again");
+      }
       setBoard((prev) => {
         const plugins = modui.applyPluginsAfterRefresh(prev.plugins, info.plugins, {
           replace: opts?.replacePlugins,
@@ -62,6 +83,7 @@ export function useStomp() {
   const connect = useCallback(async () => {
     setError(null);
     setBusy(true);
+    setConnectAttempted(true);
     try {
       if (modui.fixHostForCurrentOrigin()) {
         setHostState("");
@@ -73,28 +95,50 @@ export function useStomp() {
       setPedalboards(list);
       const current = await modui.getCurrentPedalboardBundle();
       const initial =
-        current ??
+        (current && current.length > 0 ? current : null) ??
         (list.find((p) => p.bundle === activeBundle)?.bundle ?? list[0]?.bundle);
       if (initial) {
         setActiveBundle(initial);
-        await refreshBoard(initial, true);
+        if (isPiStompMode()) {
+          const wsOk = await modui.ensureWebSocketReady();
+          if (!wsOk) {
+            setError(
+              "WebSocket to MOD failed — re-run install-on-pistomp.sh (nginx /websocket Origin fix)",
+            );
+          }
+          const loaded = await modui.syncHostPedalboard(initial);
+          if (!loaded) {
+            setError("Could not load pedalboard into MOD — try Change pedalboard again");
+          }
+        }
+        await refreshBoard(initial, true, { replacePlugins: true });
       }
       setDirty(false);
+      await refreshHardwareInput();
     } catch (e) {
       setMode("demo");
       setPedalboards(demo.DEMO_PEDALBOARDS);
       setBoard(demo.DEMO_BOARD);
       setGlobals(demo.DEMO_GLOBALS);
       setSnapshots(demo.DEMO_SNAPSHOTS);
+      setHardwareInput(null);
       setError(e instanceof Error ? e.message : "Cannot reach Pi-Stomp");
     } finally {
       setBusy(false);
     }
-  }, [activeBundle, refreshBoard]);
+  }, [activeBundle, refreshBoard, refreshHardwareInput]);
 
   useEffect(() => {
     void connect();
   }, []);
+
+  useEffect(() => {
+    if (mode !== "live") {
+      setWsConnected(false);
+      return;
+    }
+    return modui.onWebSocketStatus(setWsConnected);
+  }, [mode]);
 
   useEffect(() => {
     if (mode !== "live") return;
@@ -107,40 +151,37 @@ export function useStomp() {
     const stopWs = modui.connectWebSocket((msg) => {
       const ev = modui.parseParamSetWsMessage(msg);
       if (ev?.kind === "bypass") {
-        setBoard((prev) => ({
-          ...prev,
-          plugins: prev.plugins.map((p) =>
-            p.instance === ev.instance ? { ...p, bypassed: ev.bypassed } : p,
-          ),
-        }));
+        setBoard((prev) => {
+          const plugins = modui.applyInboundBypass(prev.plugins, ev.instance, ev.bypassed);
+          return plugins ? { ...prev, plugins } : prev;
+        });
         return;
       }
       if (ev?.kind === "param") {
         setBoard((prev) => ({
           ...prev,
-          plugins: prev.plugins.map((p) =>
-            p.instance === ev.instance
-              ? {
-                  ...p,
-                  ports: p.ports.map((pt) =>
-                    pt.symbol === ev.port ? { ...pt, value: ev.value } : pt,
-                  ),
-                }
-              : p,
-          ),
+          plugins: prev.plugins.map((p) => {
+            if (!modui.instanceIdsMatch(p.instance, ev.instance)) return p;
+            const ports = p.ports.map((pt) =>
+              pt.symbol === ev.port ? { ...pt, value: ev.value } : pt,
+            );
+            const withPorts = { ...p, ports };
+            const bypassed = isNativeBypassPortSymbol(ev.port)
+              ? bypassedFromNativePortValue(withPorts, ev.port, ev.value)
+              : p.bypassed;
+            return { ...withPorts, bypassed };
+          }),
         }));
         setGlobals((prev) =>
           prev.map((g) =>
-            g.instance === ev.instance && g.port === ev.port ? { ...g, value: ev.value } : g,
+            modui.instanceIdsMatch(g.instance, ev.instance) && g.port === ev.port
+              ? { ...g, value: ev.value }
+              : g,
           ),
         );
         return;
       }
-      if (
-        msg.includes("load-pb") ||
-        msg.includes("snapshot") ||
-        msg.includes("pedalboard")
-      ) {
+      if (modui.shouldReloadBoardFromWs(msg)) {
         onPedalboardReload();
       }
     });
@@ -157,7 +198,7 @@ export function useStomp() {
   const selectPedalboard = async (pb: PedalboardSummary) => {
     setBusy(true);
     setError(null);
-    setBoard((prev) => ({ ...prev, title: pb.title, plugins: [] }));
+    setBoard((prev) => ({ ...prev, title: pb.title }));
     try {
       if (mode === "live") {
         const ok = await modui.loadPedalboard(pb.bundle);
@@ -171,7 +212,9 @@ export function useStomp() {
       setDirty(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Load failed");
-      if (mode === "live" && activeBundle) await refreshBoard(activeBundle, true);
+      if (mode === "live" && activeBundle) {
+        await refreshBoard(activeBundle, true, { replacePlugins: true });
+      }
     } finally {
       setBusy(false);
     }
@@ -182,25 +225,49 @@ export function useStomp() {
     setBoard((prev) => ({
       ...prev,
       plugins: prev.plugins.map((p) =>
-        p.instance === plugin.instance ? { ...p, bypassed: next } : p,
+        modui.instanceIdsMatch(p.instance, plugin.instance) ? { ...p, bypassed: next } : p,
       ),
     }));
     markDirty();
     if (mode === "live") {
-      const ok = await modui.setBypass(plugin.instance, next);
+      const ok = await modui.setPluginBypass(plugin, next);
+      if (ok) {
+        setBoard((prev) => ({
+          ...prev,
+          plugins: prev.plugins.map((p) => {
+            if (!modui.instanceIdsMatch(p.instance, plugin.instance)) return p;
+            const sym = findNativeBypassPort(p);
+            const ports = sym
+              ? p.ports.map((pt) =>
+                  pt.symbol === sym
+                    ? { ...pt, value: nativeBypassValueForTarget(p, sym, next) }
+                    : pt,
+                )
+              : p.ports;
+            return { ...p, bypassed: next, ports };
+          }),
+        }));
+      }
       if (!ok) {
         setBoard((prev) => ({
           ...prev,
           plugins: prev.plugins.map((p) =>
-            p.instance === plugin.instance ? { ...p, bypassed: !next } : p,
+            modui.instanceIdsMatch(p.instance, plugin.instance)
+              ? { ...p, bypassed: !next }
+              : p,
           ),
         }));
-        setError("Bypass failed — could not reach MOD on the Pi (reload page; check :8080 proxy)");
+        setError(
+          "Bypass failed — tap Change pedalboard, pick the same board again, then retry",
+        );
       }
     }
   };
 
   const setEffectParameter = async (instance: string, port: string, value: number) => {
+    const prevPort = board.plugins
+      .find((p) => p.instance === instance)
+      ?.ports.find((pt) => pt.symbol === port)?.value;
     setBoard((prev) => ({
       ...prev,
       plugins: prev.plugins.map((p) =>
@@ -219,9 +286,42 @@ export function useStomp() {
     if (mode === "live") {
       const ok = await modui.setParameter(instance, port, value);
       if (!ok) {
-        setError("Parameter update failed — could not reach MOD on the Pi");
+        if (prevPort !== undefined) {
+          setBoard((prev) => ({
+            ...prev,
+            plugins: prev.plugins.map((p) =>
+              p.instance === instance
+                ? {
+                    ...p,
+                    ports: p.ports.map((pt) =>
+                      pt.symbol === port ? { ...pt, value: prevPort } : pt,
+                    ),
+                  }
+                : p,
+            ),
+          }));
+        }
+        setError(
+          "Parameter failed — tap Change pedalboard, reload the same board, then retry",
+        );
       }
     }
+  };
+
+  const setHardwareInputValue = async (value: number) => {
+    if (!hardwareInput) return;
+    const prev = hardwareInput.value;
+    setHardwareInput((s) => (s ? { ...s, value } : s));
+    const ok = await pistompAudio.setAlsaValue(hardwareInput.control, value);
+    if (!ok) {
+      setHardwareInput((s) => (s ? { ...s, value: prev } : s));
+      setError("Hardware volume failed — re-run install-on-pistomp.sh on the Pi");
+    }
+  };
+
+  const setHardwareInputControl = async (controlName: string) => {
+    pistompAudio.setStoredAlsaControl(controlName);
+    await refreshHardwareInput(controlName);
   };
 
   const loadSnapshot = async (id: string) => {
@@ -299,6 +399,23 @@ export function useStomp() {
     board.plugins.find((p) => p.instance === instance);
 
   const activeCount = board.plugins.filter((p) => !p.bypassed).length;
+  const connectionBroken =
+    mode === "demo" || (mode === "live" && connectAttempted && !busy && !wsConnected);
+  const boardEmptyWarning =
+    mode === "live" && board.plugins.length === 0 && connectAttempted && !busy;
+
+  const collectQa = useCallback(
+    () =>
+      collectQaReport({
+        mode,
+        host,
+        error,
+        activeBundle,
+        board,
+        hardwareInputAvailable: hardwareInput?.available ?? false,
+      }),
+    [mode, host, error, activeBundle, board, hardwareInput?.available],
+  );
 
   return {
     mode,
@@ -309,21 +426,27 @@ export function useStomp() {
     snapshots,
     activeSnapshot,
     globals,
+    hardwareInput,
     dirty,
     busy,
     error,
     activeCount,
+    connectionBroken,
+    boardEmptyWarning,
     connect,
     selectPedalboard,
     toggleBypass,
     setEffectParameter,
     loadSnapshot,
     setGlobalValue,
+    setHardwareInputValue,
+    setHardwareInputControl,
     saveChanges,
     saveHost,
     saveRuntimeMode,
     runtimeMode,
     getPlugin,
+    collectQa,
     clearError: () => setError(null),
   };
 }

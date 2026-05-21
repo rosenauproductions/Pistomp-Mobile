@@ -1,4 +1,11 @@
 import { getEditablePorts } from "../api/modui";
+import {
+  formatPortValue,
+  portDisplayPercent,
+  portSliderMax,
+  portSliderMin,
+  portSliderStep,
+} from "../api/portUtils";
 import type { EffectPlugin } from "../api/types";
 import { Sheet } from "./Sheet";
 
@@ -22,20 +29,22 @@ export function EffectSettingsSheet({ plugin, open, onClose, onChange }: Props) 
           <p className="effect-settings-empty">No adjustable parameters for this effect.</p>
         ) : (
           ports.map((port) => {
-            const min = port.minimum ?? 0;
-            const max = port.maximum ?? 1;
-            const pct = max > min ? Math.round(((port.value - min) / (max - min)) * 100) : 0;
+            const min = portSliderMin(port);
+            const max = portSliderMax(port);
+            const pct = portDisplayPercent(port);
             return (
               <div key={port.symbol} className="global-row">
                 <label>
                   <span>{port.symbol}</span>
-                  <span>{pct}%</span>
+                  <span>
+                    {formatPortValue(port)} ({pct}%)
+                  </span>
                 </label>
                 <input
                   type="range"
                   min={min}
                   max={max}
-                  step={(max - min) / 100}
+                  step={portSliderStep(port)}
                   value={port.value}
                   onChange={(e) => onChange(plugin.instance, port.symbol, Number(e.target.value))}
                 />

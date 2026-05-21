@@ -10,7 +10,7 @@ Use **Settings → Runtime** (dev only) to switch modes. Production installs on 
 |--------|----------|
 | API | Same origin `:8080`; Host field **empty** |
 | Current pedalboard | `GET /pedalboard/current` when available |
-| Bypass / parameters | **`POST /effect/parameter/pi_stomp_set//graph/{instance}/{port}`** (pi-stomp patch); WebSocket for inbound sync |
+| Bypass / parameters | **WebSocket `param_set` first** (stock MOD-UI, same as [pi-stomp PR #25](https://github.com/sastraxi/pi-stomp/pull/25)); fallback `POST …/pi_stomp_set/…` (pi-stomp patch). WS for inbound sync too |
 | Bypass in `/pedalboard/info/` | Treated as live enough for refresh |
 | `last.json` | **Not used** |
 | Direct `ws://127.0.0.1:18181` | **Not used** |
@@ -23,7 +23,7 @@ On the **device**, “Input Gain” in the pi-stomp system menu adjusts the **AL
 **Pistomp-Mobile today:**
 
 - **Quick controls → Gain / Master** — optional MOD plugins on the *loaded pedalboard* (via WebSocket `param_set`). If your board has no Gain/Master block, those sliders do not appear. This is **not** the same as hardware input gain.
-- **Settings** — connection host only (no ALSA slider yet).
+- **Settings** — ALSA control picker + connection host (leave host **empty** on `:8080` so API/WS stay same-origin).
 
 **MOD Desktop dev** has no equivalent: capture level is the host OS / interface, not something MOD-UI exposes over `/effect/*`.
 
@@ -43,6 +43,7 @@ Do not route hardware input gain through MOD WebSocket; it is outside the pedalb
 | Current pedalboard | `/pedalboard/current` is **404**; use `~/Documents/MOD Desktop/last.json` via `/mod-last.json` |
 | Bypass / parameters | **WebSocket only** — HTTP set returns `true` but FakeHMI does nothing |
 | WebSocket `param_set` | Out: `param_set /graph/{instance}/{port} {value}` — In: `param_set /graph/{instance} {port} {value}` |
+| WebSocket protocol | Must echo `ping` → `pong` and `data_ready …` → same line (MOD-UI stalls otherwise) |
 | `/pedalboard/info/` | **Stale** (disk); poll must not overwrite live bypass/values — merge from UI + WS |
 | WebSocket | `ws://localhost:5173/websocket` (Vite proxy; MOD rejects `Origin: :5173` — proxy rewrites to `http://127.0.0.1:18181`) |
 | Snapshots | `snapshot/name?id=current` often **500** on Desktop |

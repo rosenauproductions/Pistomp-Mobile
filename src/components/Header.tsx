@@ -3,6 +3,7 @@ import type { ConnectionMode } from "../api/types";
 interface Props {
   title: string;
   mode: ConnectionMode;
+  connectionBroken: boolean;
   dirty: boolean;
   saving: boolean;
   onSave: () => void;
@@ -13,6 +14,7 @@ interface Props {
 export function Header({
   title,
   mode,
+  connectionBroken,
   dirty,
   saving,
   onSave,
@@ -39,7 +41,16 @@ export function Header({
           {saving ? "…" : "Save"}
         </button>
       )}
-      <span className={`badge ${mode}`}>{mode}</span>
+      {connectionBroken ? (
+        <span className="badge broken" role="status" aria-live="polite" title="No server connection">
+          <span className="broken-icon" aria-hidden>
+            ⚠
+          </span>
+          offline
+        </span>
+      ) : (
+        <span className={`badge ${mode}`}>{mode}</span>
+      )}
       <button type="button" className="icon-btn" onClick={onSettings} aria-label="Connection settings">
         ⚙
       </button>

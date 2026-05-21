@@ -20,7 +20,7 @@ export function setRuntimeMode(mode: RuntimeMode): void {
 }
 
 /** True when the UI is served from the Pi (ignore dev localStorage). */
-function isOnPiStompDevice(): boolean {
+export function isOnPiStompDevice(): boolean {
   if (typeof window === "undefined") return false;
   const h = window.location.hostname;
   return h === "pistomp.local" || h === "172.24.1.1";
