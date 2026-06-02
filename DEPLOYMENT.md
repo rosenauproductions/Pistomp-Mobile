@@ -14,7 +14,7 @@ This guide walks through putting the mobile web UI on your Pi-Stomp so you can c
 
 The phone talks only to the Pi. nginx forwards `/pedalboard/*`, `/effect/*`, `/snapshot/*`, and `/websocket` to MOD-UI on `127.0.0.1:80`, so the browser stays same-origin and nothing needs CORS hacks.
 
-**WiFi admin (Settings → Admin):** Toggles between Pi **hotspot** (`pistomp` / `pistompwifi`) and **router** mode using the same NetworkManager logic as the Pi-Stomp System menu. Requires a full `install-on-pistomp.sh` run (not `dist/` only) and a reboot. Switching modes will disconnect your phone briefly — follow the on-screen warnings.
+**WiFi admin (Settings → Admin):** Toggles between Pi **hotspot** (`pistomp` / `pistompwifi`) and **router** mode using the same NetworkManager logic as the Pi-Stomp System menu. **0.2.13+** saves the choice to `/home/pistomp/data/pistomp-mobile-wifi-mode.json` and reapplies it on boot (`pistomp-wifi-mode-apply.service`). Requires a full `install-on-pistomp.sh` run (not `dist/` only). Switching modes will disconnect your phone briefly — follow the on-screen warnings.
 
 After install, verify: `curl -s http://127.0.0.1:8080/pistomp/wifi/status`
 

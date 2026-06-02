@@ -274,14 +274,33 @@ RestartSec=3
 [Install]
 WantedBy=multi-user.target
 EOF
+WIFI_MODE_UNIT="/etc/systemd/system/pistomp-wifi-mode-apply.service"
+cat > "${WIFI_MODE_UNIT}" <<EOF
+[Unit]
+Description=Apply Pistomp-Mobile saved WiFi mode on boot
+After=network-online.target NetworkManager.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 ${WIFI_API_DEST} --apply-saved-mode
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
 if [[ "${IN_CHROOT}" -eq 1 ]]; then
-  echo "Note: pistomp-wifi-api will start after reboot."
+  echo "Note: pistomp-wifi-api and pistomp-wifi-mode-apply will start after reboot."
 else
   systemctl daemon-reload
   systemctl enable pistomp-wifi-api.service
+  systemctl enable pistomp-wifi-mode-apply.service
   systemctl restart pistomp-wifi-api.service || systemctl start pistomp-wifi-api.service
 fi
 
+mkdir -p /home/pistomp/data
+chmod 775 /home/pistomp/data 2>/dev/null || true
 if [[ -f /home/pistomp/data/last.json ]]; then
   chmod o+r /home/pistomp/data/last.json 2>/dev/null || true
 fi

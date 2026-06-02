@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.13 (2026-06-02)
+
+- **WiFi:** Router/hotspot mode persists across reboot — saves preference under `/home/pistomp/data/`, sets NetworkManager autoconnect flags, disables `wifi-hotspot.service` in router mode, applies on boot via `pistomp-wifi-mode-apply.service`.
+
 ## 0.2.12 (2026-06-02)
 
 - **Fix:** Settings checkbox layout — full-width input styles no longer stretch Admin checkboxes; checkbox left, label text immediately to the right.
