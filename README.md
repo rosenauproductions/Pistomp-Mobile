@@ -4,6 +4,8 @@ Lightweight, mobile-first web UI for [Pi-Stomp](https://github.com/TreeFallSound
 
 **Repository:** https://github.com/rosenauproductions/Pistomp-Mobile
 
+Release notes: **[CHANGELOG.md](./CHANGELOG.md)**
+
 ## Features
 
 - Pedalboard list and load
@@ -15,6 +17,7 @@ Lightweight, mobile-first web UI for [Pi-Stomp](https://github.com/TreeFallSound
 - LIVE / DEMO mode with configurable Pi host
 - PWA manifest (Add to Home Screen)
 - One-command Pi install via nginx
+- Settings → **Admin**: Wi‑Fi hotspot/router mode, **Configure WiFi** (SSID/password), optional main-screen input gain slider, ALSA input control
 
 ---
 
@@ -33,13 +36,15 @@ npm install
 npm run build
 ```
 
-**2. Copy `dist/` to the Pi** (locked SD — use root-ro path):
+**2. Copy build to the Pi** (see [DEPLOYMENT.md](./DEPLOYMENT.md) for overlayroot staging + chroot):
 
 ```bash
-scp -r dist pistomp@pistomp.local:/media/root-ro/home/pistomp/Pistomp-Mobile/
+scp -r dist install-on-pistomp.sh scripts \
+  pistomp@pistomp.local:/home/pistomp/Pistomp-Mobile/
 ```
 
-First time also copy `install-on-pistomp.sh` into that folder. See [DEPLOYMENT.md](./DEPLOYMENT.md#standard-workflow-locked-sd--overlayroot).
+If `scp` fails with permission denied after a chroot install:  
+`ssh pistomp@pistomp.local "sudo chown -R pistomp:pistomp /home/pistomp/Pistomp-Mobile"`
 
 On the Pi: `~/pi-stomp/` (firmware) and `~/Pistomp-Mobile/` (this UI) are **sibling folders**. The Pi copy is **not** a git repo.
 

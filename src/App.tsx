@@ -34,6 +34,7 @@ export default function App() {
         onSave={() => void stomp.saveChanges()}
         onPedalboards={() => setPedalboardsOpen(true)}
         onSettings={() => setSettingsOpen(true)}
+        onReconnect={() => void stomp.connect()}
       />
 
       <main className="main">
@@ -60,7 +61,7 @@ export default function App() {
           onSelect={(id) => void stomp.loadSnapshot(id)}
         />
 
-        {stomp.hardwareInput && (
+        {stomp.showHardwareInput && stomp.hardwareInput && (
           <HardwareInputControls
             state={stomp.hardwareInput}
             onChange={(v) => void stomp.setHardwareInputValue(v)}
@@ -97,10 +98,14 @@ export default function App() {
         mode={stomp.mode}
         runtimeMode={stomp.runtimeMode}
         hardwareInput={stomp.hardwareInput}
+        wifiAdminAvailable={stomp.wifiAdminAvailable}
+        onRefreshWifi={stomp.refreshWifiStatus}
         onClose={() => setSettingsOpen(false)}
         onSave={stomp.saveHost}
         onRuntimeModeChange={stomp.saveRuntimeMode}
         onHardwareControlChange={(name) => void stomp.setHardwareInputControl(name)}
+        showHardwareInput={stomp.showHardwareInput}
+        onShowHardwareInputChange={stomp.setShowHardwareInput}
         onTest={() => void stomp.connect()}
         onCollectQa={stomp.collectQa}
       />

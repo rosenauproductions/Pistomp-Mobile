@@ -105,18 +105,42 @@ input {
   color: #e8a84a;
 }
 
+.header-connection {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.reconnect-btn {
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+  animation: reconnect-spin-hint 2.5s ease-in-out infinite;
+}
+
+.reconnect-btn:active {
+  transform: scale(0.94);
+}
+
+@keyframes reconnect-spin-hint {
+  0%,
+  85%,
+  100% {
+    transform: rotate(0deg);
+  }
+  92% {
+    transform: rotate(-180deg);
+  }
+}
+
 .badge.broken {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
   background: #3d1414;
   color: var(--danger);
   animation: connection-broken-pulse 1.1s ease-in-out infinite;
-}
-
-.broken-icon {
-  font-size: 0.85rem;
-  line-height: 1;
 }
 
 @keyframes connection-broken-pulse {
@@ -142,6 +166,193 @@ input {
 
 .board-warning strong {
   color: #ffb4b4;
+}
+
+.wifi-admin-status {
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
+}
+
+.wifi-admin-warning {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #5a4a20;
+  background: #2a2418;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.wifi-admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.wifi-admin-error {
+  margin: 0.5rem 0 0;
+  color: var(--danger);
+  font-size: 0.85rem;
+}
+
+.admin-block {
+  margin-top: 0.5rem;
+  padding: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.admin-section-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.admin-subsection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.admin-subsection-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.admin-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 0.5rem 0;
+}
+
+.admin-toggle-row input[type="checkbox"] {
+  width: 1.15rem;
+  height: 1.15rem;
+  min-width: 1.15rem;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  border-radius: 4px;
+  accent-color: var(--accent);
+}
+
+.admin-toggle-row span {
+  flex: 1 1 auto;
+  line-height: 1.35;
+}
+
+.wifi-mode-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+  margin-top: 0.5rem;
+}
+
+.wifi-mode-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  padding: 0.85rem 0.75rem;
+  border-radius: 12px;
+  border: 2px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-height: 3.5rem;
+}
+
+.wifi-mode-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.wifi-mode-btn.hotspot:not(:disabled) {
+  border-color: #c77d2e;
+  background: color-mix(in srgb, #c77d2e 14%, var(--bg));
+}
+
+.wifi-mode-btn.router:not(:disabled) {
+  border-color: #5b8fd4;
+  background: color-mix(in srgb, #5b8fd4 14%, var(--bg));
+}
+
+.wifi-mode-btn.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.wifi-mode-btn-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.wifi-mode-btn-sub {
+  font-size: 0.72rem;
+  color: var(--muted);
+  line-height: 1.25;
+}
+
+.wifi-refresh-link {
+  width: 100%;
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+}
+
+.wifi-configure {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.wifi-config-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.wifi-config-heading {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.field-label {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.wifi-config-block label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.wifi-config-block input,
+.wifi-config-block select {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.65rem 0.75rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
 }
 
 .icon-btn {
@@ -492,7 +703,7 @@ input {
   font-size: 1rem;
 }
 
-.settings-form input {
+.settings-form input:not([type="checkbox"]):not([type="radio"]) {
   width: 100%;
   padding: 0.75rem;
   border-radius: 10px;

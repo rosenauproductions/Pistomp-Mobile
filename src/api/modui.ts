@@ -481,6 +481,7 @@ export async function runConnectionProbes(
   lines.push(await fetchProbe("/pedalboard/current"));
   lines.push(await fetchProbe("/pistomp-last.json"));
   lines.push(await fetchProbe("/pistomp/audio/controls"));
+  lines.push(await fetchProbe("/pistomp/wifi/status"));
 
   if (!plugin) {
     lines.push("  (no plugin — load a pedalboard first)");

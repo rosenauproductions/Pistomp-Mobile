@@ -248,6 +248,40 @@ else
   systemctl restart pistomp-audio-api.service || systemctl start pistomp-audio-api.service
 fi
 
+WIFI_API_DEST="${INSTALL_DIR}/pistomp-wifi-api.py"
+if [[ -f scripts/pistomp-wifi-api.py ]]; then
+  install -m 755 scripts/pistomp-wifi-api.py "${WIFI_API_DEST}"
+else
+  echo "scripts/pistomp-wifi-api.py not found — copy the full Pistomp-Mobile repo and re-run install."
+  exit 1
+fi
+
+WIFI_UNIT="/etc/systemd/system/pistomp-wifi-api.service"
+cat > "${WIFI_UNIT}" <<EOF
+[Unit]
+Description=Pistomp Mobile WiFi API
+After=network-online.target NetworkManager.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/bin/python3 ${WIFI_API_DEST}
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+if [[ "${IN_CHROOT}" -eq 1 ]]; then
+  echo "Note: pistomp-wifi-api will start after reboot."
+else
+  systemctl daemon-reload
+  systemctl enable pistomp-wifi-api.service
+  systemctl restart pistomp-wifi-api.service || systemctl start pistomp-wifi-api.service
+fi
+
 if [[ -f /home/pistomp/data/last.json ]]; then
   chmod o+r /home/pistomp/data/last.json 2>/dev/null || true
 fi
@@ -283,6 +317,14 @@ server {
         proxy_pass http://127.0.0.1:8766/;
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
+    }
+
+    location /pistomp/wifi/ {
+        proxy_pass http://127.0.0.1:8767/;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
     }
 
     location ^~ /reset {
@@ -332,7 +374,7 @@ echo ""
 echo "Done. Open http://pistomp.local:${PORT} from your phone (or http://172.24.1.1:${PORT} if .local does not resolve)."
 echo "Add to Home Screen for an app icon."
 echo ""
-echo "Includes: /pistomp-last.json, /reset proxy, /pistomp/audio/ (ALSA input gain), pi_stomp_set for stomps."
+echo "Includes: /pistomp-last.json, /reset proxy, /pistomp/audio/, /pistomp/wifi/ (hotspot toggle), pi_stomp_set for stomps."
 echo "UI-only dist copy (scp dist only) does NOT update nginx or the audio API — run this script after UI changes."
 if [[ "${IN_CHROOT}" -eq 1 ]]; then
   echo ""
@@ -342,4 +384,5 @@ if [[ "${IN_CHROOT}" -eq 1 ]]; then
   echo "After boot (optional):"
   echo "  systemctl status pistomp-audio-api"
   echo "  curl -s http://127.0.0.1:8080/pistomp/audio/controls | head"
+  echo "  curl -s http://127.0.0.1:8080/pistomp/wifi/status"
 fi

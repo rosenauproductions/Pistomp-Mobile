@@ -9,6 +9,7 @@ interface Props {
   onSave: () => void;
   onSettings: () => void;
   onPedalboards: () => void;
+  onReconnect: () => void;
 }
 
 export function Header({
@@ -20,6 +21,7 @@ export function Header({
   onSave,
   onSettings,
   onPedalboards,
+  onReconnect,
 }: Props) {
   return (
     <header className="header">
@@ -42,12 +44,20 @@ export function Header({
         </button>
       )}
       {connectionBroken ? (
-        <span className="badge broken" role="status" aria-live="polite" title="No server connection">
-          <span className="broken-icon" aria-hidden>
-            ⚠
+        <div className="header-connection">
+          <button
+            type="button"
+            className="icon-btn reconnect-btn"
+            onClick={onReconnect}
+            aria-label="Reconnect to Pi-Stomp"
+            title="Reconnect"
+          >
+            ↻
+          </button>
+          <span className="badge broken" role="status" aria-live="polite" title="No server connection">
+            offline
           </span>
-          offline
-        </span>
+        </div>
       ) : (
         <span className={`badge ${mode}`}>{mode}</span>
       )}

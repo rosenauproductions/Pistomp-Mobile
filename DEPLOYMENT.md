@@ -9,8 +9,14 @@ This guide walks through putting the mobile web UI on your Pi-Stomp so you can c
 | **Static web app** (`dist/`) | The mobile UI (HTML/JS/CSS) |
 | **nginx on port 8080** | Serves the app and proxies API calls to MOD-UI |
 | **MOD-UI (already on Pi-Stomp)** | Runs on port **80** — pedalboards, effects, snapshots |
+| **pistomp-audio-api** (port 8766) | Hardware ALSA gain via `/pistomp/audio/` |
+| **pistomp-wifi-api** (port 8767) | Hotspot ↔ router toggle via `/pistomp/wifi/` (Settings → Admin) |
 
 The phone talks only to the Pi. nginx forwards `/pedalboard/*`, `/effect/*`, `/snapshot/*`, and `/websocket` to MOD-UI on `127.0.0.1:80`, so the browser stays same-origin and nothing needs CORS hacks.
+
+**WiFi admin (Settings → Admin):** Toggles between Pi **hotspot** (`pistomp` / `pistompwifi`) and **router** mode using the same NetworkManager logic as the Pi-Stomp System menu. Requires a full `install-on-pistomp.sh` run (not `dist/` only) and a reboot. Switching modes will disconnect your phone briefly — follow the on-screen warnings.
+
+After install, verify: `curl -s http://127.0.0.1:8080/pistomp/wifi/status`
 
 ### Directory layout on the Pi (two folders)
 
@@ -189,47 +195,79 @@ If `.local` fails: `ssh pistomp@172.24.1.1` (hotspot gateway; phones get `172.24
 
 ## Step 5 — Run the install script
 
-### Read-only root (overlayroot / “locked SD”)
+### Read-only root (overlayroot / “locked SD”) — verified workflow
 
-Many Pi-Stomp images use **overlayroot**: the running system is read-only; the real SD is only writable inside a chroot.
+Many Pi-Stomp images use **overlayroot**. Three filesystem layers matter:
 
-| Step | Writable? |
-|------|-----------|
-| `scp` → `/home/pistomp/` | ✅ Usually yes (your SCP already worked) |
-| Install to `/opt/…`, `/etc/nginx/` | ❌ Needs **`sudo overlayroot-chroot`** |
+| Path | What it is |
+|------|------------|
+| `~/Pistomp-Mobile/` (normal SSH) | **Overlay** (RAM) — Mac `scp` lands here |
+| `/boot/pistomp-deploy/` | **Overlay** — do **not** use; chroot cannot see it |
+| `/boot/firmware/pistomp-deploy/` | **FAT on SD** (`mmcblk0p1`) — use this staging area |
+| `/home/pistomp/…` inside **chroot** | **Real root** on SD — `install-on-pistomp.sh` writes here |
 
-**First-time install** (nginx + `/opt/pistomp-mobile`):
+`scp` → `/media/root-ro/…` from the Mac usually **fails** (read-only).  
+`rsync` → `/media/root-ro/…` from SSH also **fails** (read-only until chroot).
+
+#### Mac (every update)
+
+```bash
+cd ~/Pistomp-Mobile
+npm run build
+ssh pistomp@pistomp.local "mkdir -p /home/pistomp/Pistomp-Mobile"
+scp -r dist install-on-pistomp.sh scripts \
+  pistomp@pistomp.local:/home/pistomp/Pistomp-Mobile/
+```
+
+#### Pi — stage onto FAT boot (normal SSH, **not** chroot)
 
 ```bash
 ssh pistomp@pistomp.local
-cd ~/Pistomp-Mobile
-chmod +x install-on-pistomp.sh update-dist-on-pistomp.sh
+bash ~/Pistomp-Mobile/scripts/stage-on-boot-firmware.sh
+# Or manually:
+#   sudo mkdir -p /boot/firmware/pistomp-deploy/scripts
+#   sudo cp -r ~/Pistomp-Mobile/dist ~/Pistomp-Mobile/install-on-pistomp.sh ~/Pistomp-Mobile/scripts /boot/firmware/pistomp-deploy/
+#   ls /boot/firmware/pistomp-deploy/scripts/   # both .py files
+#   df -h /boot/firmware/pistomp-deploy         # must show /dev/mmcblk0p1, NOT overlayroot
+```
 
+`cp` may warn `failed to preserve ownership` on FAT — **ignore**; files are still copied.
+
+#### Pi — chroot, copy from host mount, install
+
+```bash
 sudo overlayroot-chroot
-# writable shell (often as root) — use Pistomp-Mobile, not pi-stomp:
+mkdir -p /home/pistomp/Pistomp-Mobile
+cp -a /proc/1/root/boot/firmware/pistomp-deploy/dist \
+      /proc/1/root/boot/firmware/pistomp-deploy/install-on-pistomp.sh \
+      /proc/1/root/boot/firmware/pistomp-deploy/scripts \
+      /home/pistomp/Pistomp-Mobile/
+ls -la /home/pistomp/Pistomp-Mobile/scripts/   # must list both .py files
 cd /home/pistomp/Pistomp-Mobile
 bash install-on-pistomp.sh
-exit
-
-sudo systemctl reload nginx
 ```
 
-Run `systemctl reload nginx` **after** you `exit` the chroot (systemd is the live system, not the chroot).
+Expect **`Done. Open http://pistomp.local:8080…`** and **no** `scripts/pistomp-wifi-api.py not found`.
 
-**Later updates** (new `dist/` only — nginx already configured):
+Quick check before leaving chroot:
 
 ```bash
-ssh pistomp@pistomp.local
-# Mac: scp -r Pistomp-Mobile pistomp@pistomp.local:/home/pistomp/
-#   → creates /home/pistomp/Pistomp-Mobile (sibling of /home/pistomp/pi-stomp)
-
-sudo overlayroot-chroot
-cd /home/pistomp/Pistomp-Mobile
-bash update-dist-on-pistomp.sh
+test -f /opt/pistomp-mobile/pistomp-wifi-api.py && echo wifi-api-ok
+grep -q pistomp/wifi /etc/nginx/sites-available/pistomp-mobile && echo nginx-ok
 exit
-
-sudo systemctl reload nginx
+sudo reboot
 ```
+
+After reboot:
+
+```bash
+curl -s http://127.0.0.1:8080/pistomp/wifi/status
+systemctl is-active pistomp-wifi-api.service
+```
+
+**Why `/proc/1/root/boot/firmware/…`?** Inside chroot, `/boot/firmware` is often empty and `/dev/mmcblk0p1` may be busy (already mounted on the live system). The live mount is visible under the init process root.
+
+**Later updates (dist only, nginx unchanged):** Same staging + chroot copy, then either `bash install-on-pistomp.sh` (full) or `bash update-dist-on-pistomp.sh` if you only changed the UI bundle.
 
 ### Writable root (unusual)
 
@@ -310,60 +348,24 @@ Works offline for the UI shell after the first load; control still requires the 
 
 ### Standard workflow (locked SD / overlayroot)
 
-This is the flow that works on a read-only Pi-Stomp image. **`~/Pistomp-Mobile` on the Pi is not a git repo** — do not run `git pull` there. Git happens on the Mac only.
+Use the **[verified overlayroot workflow](#read-only-root-overlayroot--locked-sd--verified-workflow)** above (Mac `scp` → `~/Pistomp-Mobile` → stage on `/boot/firmware/pistomp-deploy/` → chroot copy from `/proc/1/root/boot/firmware/…` → `install-on-pistomp.sh` → reboot).
 
-**Mac:**
-
-```bash
-cd Pistomp-Mobile
-git pull
-npm run build
-scp -r dist pistomp@pistomp.local:/media/root-ro/home/pistomp/Pistomp-Mobile/
-```
-
-(`/media/root-ro/home/pistomp/…` is the same tree as `/home/pistomp/…` on the Pi.)
-
-**Pi:**
-
-```bash
-ssh pistomp@pistomp.local
-sudo overlayroot-chroot
-cd /home/pistomp/Pistomp-Mobile && bash install-on-pistomp.sh
-exit
-sudo reboot
-```
-
-`install-on-pistomp.sh` must already exist under `~/Pistomp-Mobile` (see first-time setup below). It copies `dist/` → `/opt/pistomp-mobile/dist/` and writes nginx config. **`git pull` on the Pi is not used.**
+**`~/Pistomp-Mobile` on the Pi is not a git repo** — do not run `git pull` there. Git happens on the Mac only.
 
 **Check from your Mac** after the Pi is back (must print `true`, not HTML):
 
 ```bash
 curl -s http://pistomp.local:8080/reset/
+curl -s http://pistomp.local:8080/pistomp/wifi/status
 ```
 
 Phone: **http://pistomp.local:8080** — hard refresh; clear **Host** in settings.
 
-### When nginx config changed (e.g. `/reset` proxy)
+### When nginx / APIs changed
 
-`scp dist` alone does **not** update `/etc/nginx`. Also copy the install script from the Mac, then run the same Pi steps:
+`scp dist` alone does **not** update `/etc/nginx` or `pistomp-wifi-api`. Always copy **`install-on-pistomp.sh`** and **`scripts/`** from the Mac, stage on `/boot/firmware`, then run full `install-on-pistomp.sh` in chroot.
 
-```bash
-scp install-on-pistomp.sh pistomp@pistomp.local:/media/root-ro/home/pistomp/Pistomp-Mobile/
-```
-
-Without this, `curl …/reset/` returns HTML and pedalboards **stack** when switching.
-
-### First time on a Pi
-
-Copy **`install-on-pistomp.sh`** once (plus `dist/` from `npm run build`):
-
-```bash
-scp install-on-pistomp.sh dist pistomp@pistomp.local:/media/root-ro/home/pistomp/Pistomp-Mobile/
-```
-
-Then the Pi steps above (overlayroot + `install-on-pistomp.sh` + reboot).
-
-Optional: `update-dist-on-pistomp.sh` in the same folder for dist-only copies inside chroot without rewriting nginx.
+Optional: `update-dist-on-pistomp.sh` for dist-only copies inside chroot when nginx and APIs are already installed.
 
 ### Writable-root images (no overlayroot)
 
@@ -379,6 +381,9 @@ sudo bash install-on-pistomp.sh
 | Path | Contents |
 |------|----------|
 | `/opt/pistomp-mobile/dist/` | Built web app |
+| `/opt/pistomp-mobile/pistomp-audio-api.py` | ALSA API (systemd `pistomp-audio-api`) |
+| `/opt/pistomp-mobile/pistomp-wifi-api.py` | WiFi hotspot toggle API (systemd `pistomp-wifi-api`) |
+| `/boot/firmware/pistomp-deploy/` | Staging copy for overlayroot installs (FAT) |
 | `/etc/nginx/sites-available/pistomp-mobile` | nginx config |
 | `/etc/nginx/sites-enabled/pistomp-mobile` | Symlink to enable site |
 

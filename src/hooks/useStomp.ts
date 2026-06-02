@@ -9,6 +9,9 @@ import {
 } from "../api/portUtils";
 import * as pistompAudio from "../api/pistompAudio";
 import type { HardwareInputState } from "../api/pistompAudio";
+import * as pistompWifi from "../api/pistompWifi";
+import type { WifiStatus } from "../api/pistompWifi";
+import { getShowHardwareInput, setShowHardwareInput as persistShowHardwareInput } from "../lib/adminPrefs";
 import { collectQaReport } from "../lib/diagnostics";
 import {
   getRuntimeMode,
@@ -40,6 +43,8 @@ export function useStomp() {
   const [error, setError] = useState<string | null>(null);
   const [runtimeMode, setRuntimeModeState] = useState<RuntimeMode>(getRuntimeMode);
   const [hardwareInput, setHardwareInput] = useState<HardwareInputState | null>(null);
+  const [wifiAdminAvailable, setWifiAdminAvailable] = useState(false);
+  const [showHardwareInput, setShowHardwareInputState] = useState(getShowHardwareInput);
   const [wsConnected, setWsConnected] = useState(false);
   const [connectAttempted, setConnectAttempted] = useState(false);
 
@@ -48,6 +53,12 @@ export function useStomp() {
   const refreshHardwareInput = useCallback(async (controlName?: string) => {
     const state = await pistompAudio.loadHardwareInputState(controlName);
     setHardwareInput(state);
+  }, []);
+
+  const refreshWifiStatus = useCallback(async (): Promise<WifiStatus | null> => {
+    const status = await pistompWifi.fetchWifiStatus();
+    setWifiAdminAvailable(status != null);
+    return status;
   }, []);
 
   const refreshBoard = useCallback(
@@ -115,6 +126,7 @@ export function useStomp() {
       }
       setDirty(false);
       await refreshHardwareInput();
+      await refreshWifiStatus();
     } catch (e) {
       setMode("demo");
       setPedalboards(demo.DEMO_PEDALBOARDS);
@@ -122,11 +134,12 @@ export function useStomp() {
       setGlobals(demo.DEMO_GLOBALS);
       setSnapshots(demo.DEMO_SNAPSHOTS);
       setHardwareInput(null);
+      setWifiAdminAvailable(false);
       setError(e instanceof Error ? e.message : "Cannot reach Pi-Stomp");
     } finally {
       setBusy(false);
     }
-  }, [activeBundle, refreshBoard, refreshHardwareInput]);
+  }, [activeBundle, refreshBoard, refreshHardwareInput, refreshWifiStatus]);
 
   useEffect(() => {
     void connect();
@@ -388,6 +401,11 @@ export function useStomp() {
     void connect();
   };
 
+  const setShowHardwareInput = useCallback((visible: boolean) => {
+    persistShowHardwareInput(visible);
+    setShowHardwareInputState(visible);
+  }, []);
+
   const saveRuntimeMode = (next: RuntimeMode) => {
     setRuntimeMode(next);
     setRuntimeModeState(next);
@@ -427,6 +445,10 @@ export function useStomp() {
     activeSnapshot,
     globals,
     hardwareInput,
+    wifiAdminAvailable,
+    refreshWifiStatus,
+    showHardwareInput,
+    setShowHardwareInput,
     dirty,
     busy,
     error,

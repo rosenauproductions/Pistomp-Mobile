@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ConnectionMode } from "../api/types";
 import type { HardwareInputState } from "../api/pistompAudio";
+import type { WifiStatus } from "../api/pistompWifi";
+import { WifiAdminControls } from "./WifiAdminControls";
 import { getAppVersionLabel } from "../lib/appVersion";
 import {
   isOnPiStompDevice,
@@ -15,10 +17,14 @@ interface Props {
   mode: ConnectionMode;
   runtimeMode: RuntimeMode;
   hardwareInput: HardwareInputState | null;
+  wifiAdminAvailable: boolean;
+  onRefreshWifi: () => Promise<WifiStatus | null>;
   onClose: () => void;
   onSave: (host: string) => void;
   onRuntimeModeChange: (mode: RuntimeMode) => void;
   onHardwareControlChange: (controlName: string) => void;
+  showHardwareInput: boolean;
+  onShowHardwareInputChange: (visible: boolean) => void;
   onTest: () => void;
   onCollectQa: () => Promise<string>;
 }
@@ -29,10 +35,14 @@ export function SettingsSheet({
   mode,
   runtimeMode,
   hardwareInput,
+  wifiAdminAvailable,
+  onRefreshWifi,
   onClose,
   onSave,
   onRuntimeModeChange,
   onHardwareControlChange,
+  showHardwareInput,
+  onShowHardwareInputChange,
   onTest,
   onCollectQa,
 }: Props) {
@@ -82,6 +92,67 @@ export function SettingsSheet({
         <p className="settings-version">
           Version <strong>{getAppVersionLabel()}</strong>
         </p>
+
+        {showHardware && (
+          <div className="runtime-mode-block admin-block">
+            <span className="admin-section-title">Admin</span>
+
+            <div className="admin-subsection">
+              <span className="admin-subsection-label">WiFi</span>
+              <WifiAdminControls available={wifiAdminAvailable} onRefresh={onRefreshWifi} />
+            </div>
+
+            <div className="admin-subsection">
+              <span className="admin-subsection-label">Input controls</span>
+              <label className="admin-toggle-row">
+                <input
+                  type="checkbox"
+                  checked={showHardwareInput}
+                  onChange={(e) => onShowHardwareInputChange(e.target.checked)}
+                />
+                <span>Show input gain slider on main screen</span>
+              </label>
+              <p className="runtime-mode-hint">
+                When off, input gain is only in Admin below (ALSA picker).
+              </p>
+            </div>
+
+            <div className="admin-subsection">
+              <span className="admin-subsection-label">Hardware audio (ALSA)</span>
+              {hardwareInput ? (
+                <>
+                  <label>
+                    <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>Input gain control</span>
+                    <select
+                      value={alsaControl}
+                      onChange={(e) => {
+                        setAlsaControl(e.target.value);
+                        onHardwareControlChange(e.target.value);
+                      }}
+                    >
+                      {hardwareInput.controls.map((c) => (
+                        <option key={c.name} value={c.name}>
+                          {c.label} ({c.name})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <p className="runtime-mode-hint">
+                    Same ALSA control as the Pi-Stomp system menu (e.g. Aux). Requires{" "}
+                    <code>install-on-pistomp.sh</code>.
+                  </p>
+                </>
+              ) : (
+                <p className="runtime-mode-hint">
+                  {mode === "live"
+                    ? "Hardware ALSA API not reachable — re-run install-on-pistomp.sh on the Pi."
+                    : "Connect to the Pi to configure hardware input volume."}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
         {showRuntime && (
           <div className="runtime-mode-block">
             <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>Runtime (dev)</span>
@@ -109,11 +180,6 @@ export function SettingsSheet({
           </div>
         )}
 
-        <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--muted)" }}>
-          Leave host <strong>blank</strong> when opening{" "}
-          <code>http://pistomp.local:8080</code> (or <code>172.24.1.1:8080</code>). A custom
-          host (e.g. MOD on :80) breaks stomp/slider control on the phone.
-        </p>
         <label>
           <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>Host URL</span>
           <input
@@ -144,42 +210,6 @@ export function SettingsSheet({
           <p className="runtime-mode-hint">
             Keep MOD Desktop running. WebSocket opens on first stomp (not at page load).
           </p>
-        )}
-
-        {showHardware && (
-          <div className="runtime-mode-block">
-            <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>Hardware audio (ALSA)</span>
-            {hardwareInput ? (
-              <>
-                <label>
-                  <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>Control to adjust</span>
-                  <select
-                    value={alsaControl}
-                    onChange={(e) => {
-                      setAlsaControl(e.target.value);
-                      onHardwareControlChange(e.target.value);
-                    }}
-                  >
-                    {hardwareInput.controls.map((c) => (
-                      <option key={c.name} value={c.name}>
-                        {c.label} ({c.name})
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <p className="runtime-mode-hint">
-                  Input gain uses the same ALSA control as the Pi-Stomp system menu (e.g. Aux on
-                  IQaudIO). Requires <code>install-on-pistomp.sh</code> (audio API + nginx).
-                </p>
-              </>
-            ) : (
-              <p className="runtime-mode-hint">
-                {mode === "live"
-                  ? "Hardware ALSA API not reachable — re-run install-on-pistomp.sh on the Pi."
-                  : "Connect to the Pi to configure hardware input volume."}
-              </p>
-            )}
-          </div>
         )}
 
         <div className="qa-block">

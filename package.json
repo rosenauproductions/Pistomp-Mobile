@@ -1,7 +1,7 @@
 {
   "name": "pistomp-mobile",
   "private": true,
-  "version": "0.2.6",
+  "version": "0.2.12",
   "type": "module",
   "scripts": {
     "dev": "MOD_API_TARGET=http://127.0.0.1:18181 vite",
