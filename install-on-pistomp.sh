@@ -301,6 +301,8 @@ fi
 
 mkdir -p /home/pistomp/data
 chmod 775 /home/pistomp/data 2>/dev/null || true
+mkdir -p /boot/firmware/pistomp-mobile
+chmod 755 /boot/firmware/pistomp-mobile 2>/dev/null || true
 if [[ -f /home/pistomp/data/last.json ]]; then
   chmod o+r /home/pistomp/data/last.json 2>/dev/null || true
 fi

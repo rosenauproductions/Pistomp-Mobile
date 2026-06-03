@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.14 (2026-06-02)
+
+- **WiFi:** Persist mode like pi-stomp (patchbox scripts + NM) and write to **FAT** `/boot/firmware/pistomp-mobile/wifi-mode.json` plus real SD via `/proc/1/root` (overlayroot). Copies NM profiles and disables `wifi-hotspot.service` on SD for router mode.
+- **Admin:** Input toggle is a slide switch — **Show Volume Slider?**
+- **Settings:** QA report collapsed by default (**Show QA report**).
+
 ## 0.2.13 (2026-06-02)
 
 - **WiFi:** Router/hotspot mode persists across reboot — saves preference under `/home/pistomp/data/`, sets NetworkManager autoconnect flags, disables `wifi-hotspot.service` in router mode, applies on boot via `pistomp-wifi-mode-apply.service`.

@@ -49,6 +49,7 @@ export function SettingsSheet({
   const [value, setValue] = useState(host);
   const [runtime, setRuntime] = useState(runtimeMode);
   const [alsaControl, setAlsaControl] = useState(hardwareInput?.control ?? "");
+  const [qaOpen, setQaOpen] = useState(false);
   const [qaText, setQaText] = useState("");
   const [qaBusy, setQaBusy] = useState(false);
   const [qaCopied, setQaCopied] = useState(false);
@@ -72,9 +73,12 @@ export function SettingsSheet({
       setValue(host);
       setRuntime(runtimeMode);
       setAlsaControl(hardwareInput?.control ?? "");
-      void refreshQa();
     }
-  }, [open, host, runtimeMode, hardwareInput?.control, refreshQa]);
+  }, [open, host, runtimeMode, hardwareInput?.control]);
+
+  useEffect(() => {
+    if (open && qaOpen) void refreshQa();
+  }, [open, qaOpen, refreshQa]);
 
   const copyQa = async () => {
     try {
@@ -104,17 +108,16 @@ export function SettingsSheet({
 
             <div className="admin-subsection">
               <span className="admin-subsection-label">Input controls</span>
-              <label className="admin-toggle-row">
-                <input
-                  type="checkbox"
-                  checked={showHardwareInput}
-                  onChange={(e) => onShowHardwareInputChange(e.target.checked)}
+              <div className="admin-switch-row">
+                <span>Show Volume Slider?</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={showHardwareInput}
+                  className={`admin-switch ${showHardwareInput ? "on" : ""}`}
+                  onClick={() => onShowHardwareInputChange(!showHardwareInput)}
                 />
-                <span>Show input gain slider on main screen</span>
-              </label>
-              <p className="runtime-mode-hint">
-                When off, input gain is only in Admin below (ALSA picker).
-              </p>
+              </div>
             </div>
 
             <div className="admin-subsection">
@@ -213,29 +216,43 @@ export function SettingsSheet({
         )}
 
         <div className="qa-block">
-          <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>
-            QA report (paste to support / agent)
-          </span>
-          <p className="runtime-mode-hint">
-            Tap a stomp or slider first, then Refresh — the log captures what the app tried.
-            Probes are read-only (they do not call <code>/reset/</code>, which would delete all
-            effects on the Pi).
-          </p>
-          <textarea
-            className="qa-textarea"
-            readOnly
-            value={qaBusy ? "Running probes…" : qaText}
-            rows={14}
-            aria-label="QA diagnostic report"
-          />
-          <div className="qa-actions">
-            <button type="button" className="btn-ghost" onClick={() => void refreshQa()} disabled={qaBusy}>
-              {qaBusy ? "Refreshing…" : "Refresh QA"}
-            </button>
-            <button type="button" className="btn-primary" onClick={() => void copyQa()} disabled={!qaText || qaBusy}>
-              {qaCopied ? "Copied" : "Copy QA"}
-            </button>
-          </div>
+          <button
+            type="button"
+            className="btn-ghost qa-toggle-btn"
+            aria-expanded={qaOpen}
+            onClick={() => setQaOpen((v) => !v)}
+          >
+            {qaOpen ? "Hide QA report" : "Show QA report"}
+          </button>
+          {qaOpen && (
+            <>
+              <p className="runtime-mode-hint">
+                Tap a stomp or slider first, then Refresh — the log captures what the app tried.
+                Probes are read-only (they do not call <code>/reset/</code>, which would delete all
+                effects on the Pi).
+              </p>
+              <textarea
+                className="qa-textarea"
+                readOnly
+                value={qaBusy ? "Running probes…" : qaText}
+                rows={14}
+                aria-label="QA diagnostic report"
+              />
+              <div className="qa-actions">
+                <button type="button" className="btn-ghost" onClick={() => void refreshQa()} disabled={qaBusy}>
+                  {qaBusy ? "Refreshing…" : "Refresh QA"}
+                </button>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={() => void copyQa()}
+                  disabled={!qaText || qaBusy}
+                >
+                  {qaCopied ? "Copied" : "Copy QA"}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </Sheet>

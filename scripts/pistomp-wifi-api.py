@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -28,7 +29,14 @@ DISABLE_SCRIPTS = (
     "/usr/local/bin/disable_wifi_hotspot.sh",
 )
 
-WIFI_MODE_PREF_FILE = "/home/pistomp/data/pistomp-mobile-wifi-mode.json"
+# Survives overlayroot reboot (FAT boot). Fallback for vanilla writable ~/data.
+BOOT_WIFI_DIR = "/boot/firmware/pistomp-mobile"
+WIFI_MODE_PREF_NAME = "wifi-mode.json"
+WIFI_MODE_PREF_PATHS = (
+    os.path.join(BOOT_WIFI_DIR, WIFI_MODE_PREF_NAME),
+    "/home/pistomp/data/pistomp-mobile-wifi-mode.json",
+)
+REAL_ROOT = "/proc/1/root"
 
 
 def nmcli(args: list[str], timeout: int = 30) -> tuple[Optional[bytes], Optional[bytes]]:
@@ -126,25 +134,151 @@ def find_hotspot_profile() -> Optional[str]:
     return ap_names[0]
 
 
-def load_wifi_mode_pref() -> dict:
+def _real_root() -> Optional[str]:
+    if os.path.isdir(os.path.join(REAL_ROOT, "etc")):
+        return REAL_ROOT
+    return None
+
+
+def _wifi_pref_payload(mode: str, router_connection: Optional[str] = None) -> dict:
+    payload: dict = {
+        "mode": mode,
+        "updated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "source": "pistomp-mobile",
+    }
+    if router_connection:
+        payload["routerConnection"] = router_connection
+    return payload
+
+
+def _write_pref_file(path: str, payload: dict) -> None:
     try:
-        with open(WIFI_MODE_PREF_FILE, encoding="utf-8") as f:
-            data = json.load(f)
-        if isinstance(data, dict):
-            return data
-    except (OSError, json.JSONDecodeError):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(payload, f)
+            f.write("\n")
+    except OSError:
         pass
+
+
+def load_wifi_mode_pref() -> dict:
+    paths = list(WIFI_MODE_PREF_PATHS)
+    root = _real_root()
+    if root:
+        paths.insert(0, os.path.join(root, "boot", "firmware", "pistomp-mobile", WIFI_MODE_PREF_NAME))
+    for path in paths:
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict) and data.get("mode"):
+                return data
+        except (OSError, json.JSONDecodeError):
+            continue
     return {}
 
 
 def save_wifi_mode_pref(mode: str, router_connection: Optional[str] = None) -> None:
-    payload: dict = {"mode": mode, "updated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
-    if router_connection:
-        payload["routerConnection"] = router_connection
-    os.makedirs(os.path.dirname(WIFI_MODE_PREF_FILE), exist_ok=True)
-    with open(WIFI_MODE_PREF_FILE, "w", encoding="utf-8") as f:
-        json.dump(payload, f)
-        f.write("\n")
+    payload = _wifi_pref_payload(mode, router_connection)
+    for path in WIFI_MODE_PREF_PATHS:
+        _write_pref_file(path, payload)
+    root = _real_root()
+    if root:
+        _write_pref_file(
+            os.path.join(root, "boot", "firmware", "pistomp-mobile", WIFI_MODE_PREF_NAME),
+            payload,
+        )
+
+
+def _copy_nm_profiles_to_real_root() -> None:
+    """Overlayroot: NM edits in RAM must be copied onto the real SD root."""
+    root = _real_root()
+    if not root:
+        return
+    src = "/etc/NetworkManager/system-connections"
+    dst = os.path.join(root, "etc", "NetworkManager", "system-connections")
+    if not os.path.isdir(src):
+        return
+    try:
+        os.makedirs(dst, mode=0o700, exist_ok=True)
+    except OSError:
+        return
+    for name in os.listdir(src):
+        if not name.endswith(".nmconnection"):
+            continue
+        try:
+            shutil.copy2(os.path.join(src, name), os.path.join(dst, name))
+            os.chmod(os.path.join(dst, name), 0o600)
+        except OSError:
+            pass
+
+
+def _persist_wifi_hotspot_unit_on_sd(mode: str) -> None:
+    """Match pi-gen pistomp: wifi-hotspot.service starts AP on boot unless router mode."""
+    root = _real_root()
+    if not root:
+        return
+    action = "disable" if mode == "router" else "enable"
+    try:
+        subprocess.run(
+            ["systemctl", "--root", root, action, "wifi-hotspot.service"],
+            capture_output=True,
+            timeout=60,
+            check=False,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
+
+
+def persist_wifi_mode_to_sd(mode: str, router_connection: Optional[str] = None) -> None:
+    """Write preference + pi-Stomp NM/systemd state to persistent storage (vanilla + overlay)."""
+    save_wifi_mode_pref(mode, router_connection)
+    if mode == "router":
+        for ap in list_ap_profile_names():
+            set_connection_autoconnect(ap, False)
+        if router_connection:
+            set_connection_autoconnect(router_connection, True, 80)
+    else:
+        for c in list_client_connections():
+            set_connection_autoconnect(c["name"], False)
+        for ap in list_ap_profile_names():
+            set_connection_autoconnect(ap, True, 100)
+    _copy_nm_profiles_to_real_root()
+    _persist_wifi_hotspot_unit_on_sd(mode)
+
+
+def connect_saved(name: str, wait: bool = True) -> Optional[bytes]:
+    """Same as pi-stomp modalapi/wifi/ops.connect_saved."""
+    args = ["--wait", "0", "connection", "up", name] if not wait else ["connection", "up", name]
+    _, err = nmcli(args, timeout=45 if wait else 10)
+    return err
+
+
+def disable_hotspot_pi_stomp() -> Optional[bytes]:
+    """pi-stomp modalapi/wifi/ops.disable_hotspot — down AP, reconnect client."""
+    name = find_hotspot_profile()
+    if name is not None:
+        _, err = nmcli(["connection", "down", name], timeout=20)
+        if err is not None:
+            text = err.decode("utf-8", "replace").lower()
+            if "not an active" not in text and "unknown connection" not in text:
+                return err
+    saved = list_client_connections()
+    if not saved:
+        return None
+    most_recent = max(saved, key=lambda c: c["timestamp"] or 0)
+    return connect_saved(most_recent["name"], wait=False)
+
+
+def enable_hotspot_pi_stomp() -> Optional[bytes]:
+    """pi-stomp modalapi/wifi/ops.enable_hotspot — NM only (no systemd touch)."""
+    name = find_hotspot_profile()
+    if name is None:
+        err = create_default_hotspot_profile()
+        if err is not None:
+            return err
+        name = HOTSPOT_CONN_NAME
+    _, err = nmcli(["connection", "up", name], timeout=45)
+    return err
 
 
 def set_connection_autoconnect(name: str, enabled: bool, priority: Optional[int] = None) -> Optional[bytes]:
@@ -210,40 +344,40 @@ def apply_saved_wifi_mode() -> tuple[bool, Optional[str]]:
     if not wait_for_network_manager():
         return False, "NetworkManager not ready"
     if mode == "router":
-        return apply_router_mode(pref.get("routerConnection"))
-    return apply_hotspot_mode()
+        return apply_router_mode(pref.get("routerConnection"), persist=False)
+    return apply_hotspot_mode(persist=False)
 
 
-def apply_router_mode(router_connection: Optional[str] = None) -> tuple[bool, Optional[str]]:
-    set_all_ap_autoconnect(False)
+def apply_router_mode(router_connection: Optional[str] = None, persist: bool = False) -> tuple[bool, Optional[str]]:
     router_name = pick_router_connection(
         str(router_connection) if router_connection else None,
     )
-    for c in list_client_connections():
-        set_connection_autoconnect(c["name"], c["name"] == router_name, 80 if c["name"] == router_name else None)
-    for ap in list_ap_profile_names():
-        nmcli(["connection", "down", ap], timeout=20)
+    if run_script(DISABLE_SCRIPTS) is not None:
+        err = disable_hotspot_pi_stomp()
+        if err is not None:
+            text = err.decode("utf-8", "replace")
+            if not router_name:
+                return False, text
     systemctl_wifi_hotspot_service(False)
-    run_script(DISABLE_SCRIPTS)
     if router_name:
         _, err = nmcli(["connection", "up", router_name], timeout=45)
         if err is not None:
             return False, err.decode("utf-8", "replace")
+    if persist:
+        persist_wifi_mode_to_sd("router", router_name)
     return True, None
 
 
-def apply_hotspot_mode() -> tuple[bool, Optional[str]]:
-    for c in list_client_connections():
-        set_connection_autoconnect(c["name"], False)
-    set_all_ap_autoconnect(True)
-    systemctl_wifi_hotspot_service(True)
-    err = enable_hotspot_nmcli()
-    if err is None:
-        return True, None
-    script_err = run_script(ENABLE_SCRIPTS)
-    if script_err is None:
-        return True, None
-    return False, err.decode("utf-8", "replace")
+def apply_hotspot_mode(persist: bool = False) -> tuple[bool, Optional[str]]:
+    if not persist:
+        systemctl_wifi_hotspot_service(True)
+    if run_script(ENABLE_SCRIPTS) is not None:
+        err = enable_hotspot_pi_stomp()
+        if err is not None:
+            return False, err.decode("utf-8", "replace")
+    if persist:
+        persist_wifi_mode_to_sd("hotspot")
+    return True, None
 
 
 def read_hotspot_credentials() -> tuple[str, str]:
@@ -479,24 +613,8 @@ def connect_router_wifi(ssid: str, password: str) -> tuple[bool, Optional[str]]:
 
 
 def _persist_router_mode(router_connection: str) -> None:
-    set_all_ap_autoconnect(False)
-    set_connection_autoconnect(router_connection, True, 80)
-    for c in list_client_connections():
-        if c["name"] != router_connection:
-            set_connection_autoconnect(c["name"], False)
     systemctl_wifi_hotspot_service(False)
-    save_wifi_mode_pref("router", router_connection)
-
-
-def enable_hotspot_nmcli() -> Optional[bytes]:
-    name = find_hotspot_profile()
-    if name is None:
-        err = create_default_hotspot_profile()
-        if err is not None:
-            return err
-        name = HOTSPOT_CONN_NAME
-    _, err = nmcli(["connection", "up", name], timeout=45)
-    return err
+    persist_wifi_mode_to_sd("router", router_connection)
 
 
 def run_script(paths: tuple[str, ...]) -> Optional[bytes]:
@@ -518,20 +636,15 @@ def run_script(paths: tuple[str, ...]) -> Optional[bytes]:
 
 
 def enable_hotspot() -> tuple[bool, Optional[str]]:
-    ok, err = apply_hotspot_mode()
-    if ok:
-        save_wifi_mode_pref("hotspot")
-    return ok, err
+    return apply_hotspot_mode(persist=True)
 
 
 def disable_hotspot() -> tuple[bool, Optional[str]]:
-    router_name = pick_router_connection(load_wifi_mode_pref().get("routerConnection"))
+    pref = load_wifi_mode_pref()
+    router_name = pick_router_connection(pref.get("routerConnection"))
     if not router_name:
         return False, "No saved router Wi‑Fi on the Pi — use Configure WiFi to add your home network first"
-    ok, err = apply_router_mode(router_name)
-    if ok:
-        save_wifi_mode_pref("router", router_name)
-    return ok, err
+    return apply_router_mode(router_name, persist=True)
 
 
 class Handler(BaseHTTPRequestHandler):
