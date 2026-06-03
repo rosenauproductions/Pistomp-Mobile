@@ -2,6 +2,8 @@
 
 This guide walks through putting the mobile web UI on your Pi-Stomp so you can control it from a phone over the built-in Wi‑Fi hotspot — **no internet required**.
 
+**v1.0.0** is verified on the **headless acoustic** image (overlayroot, locked SD). That workflow is the primary path below. Milestone checklist: [docs/MILESTONE-HEADLESS-ACOUSTIC.md](./docs/MILESTONE-HEADLESS-ACOUSTIC.md).
+
 ## What you are installing
 
 | Piece | Purpose |
@@ -14,7 +16,7 @@ This guide walks through putting the mobile web UI on your Pi-Stomp so you can c
 
 The phone talks only to the Pi. nginx forwards `/pedalboard/*`, `/effect/*`, `/snapshot/*`, and `/websocket` to MOD-UI on `127.0.0.1:80`, so the browser stays same-origin and nothing needs CORS hacks.
 
-**WiFi admin (Settings → Admin):** Toggles between Pi **hotspot** (`pistomp` / `pistompwifi`) and **router** mode using the same NetworkManager logic as the Pi-Stomp System menu. **0.2.14+** uses the same NM/patchbox logic as the Pi-Stomp System menu and persists mode to **`/boot/firmware/pistomp-mobile/wifi-mode.json`** (overlayroot-safe) plus the real SD root when available. Reapplies on boot via `pistomp-wifi-mode-apply.service`. Requires a full `install-on-pistomp.sh` run (not `dist/` only). See [docs/PI-STOMP-VARIANTS.md](./docs/PI-STOMP-VARIANTS.md). Switching modes will disconnect your phone briefly — follow the on-screen warnings.
+**WiFi admin (Settings → Admin):** Toggles between Pi **hotspot** (`pistomp` / `pistompwifi`) and **router** mode (same NM logic as the Pi-Stomp System menu). Persists to **`/boot/firmware/pistomp-mobile/wifi-mode.json`** and **`/opt/pistomp-mobile/`** when installed via chroot (**1.0.0** / 0.2.15+ API). Reapplies on boot via `pistomp-wifi-mode-apply.service`. Requires full `install-on-pistomp.sh` (not `dist/` only). See [docs/PI-STOMP-VARIANTS.md](./docs/PI-STOMP-VARIANTS.md). Switching modes disconnects the phone briefly.
 
 After install, verify: `curl -s http://127.0.0.1:8080/pistomp/wifi/status`
 

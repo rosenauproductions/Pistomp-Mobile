@@ -4,6 +4,8 @@ Lightweight, mobile-first web UI for [Pi-Stomp](https://github.com/TreeFallSound
 
 **Repository:** https://github.com/rosenauproductions/Pistomp-Mobile
 
+**v1.0.0** — Field-verified on **headless acoustic** Pi-Stomp (overlayroot). See [docs/MILESTONE-HEADLESS-ACOUSTIC.md](./docs/MILESTONE-HEADLESS-ACOUSTIC.md).
+
 Release notes: **[CHANGELOG.md](./CHANGELOG.md)**
 
 ## Features
@@ -50,11 +52,12 @@ On the Pi: `~/pi-stomp/` (firmware) and `~/Pistomp-Mobile/` (this UI) are **sibl
 
 Default SSH: **`pistomp`** / **`pistomp`**. Phone/UI: **http://pistomp.local:8080**
 
-**3. On the Pi** — overlayroot install + reboot:
+**3. On the Pi** — headless acoustic uses overlayroot (required for locked SD):
 
 ```bash
-ssh pistomp@pistomp.local
+bash ~/Pistomp-Mobile/scripts/stage-on-boot-firmware.sh
 sudo overlayroot-chroot
+# copy from /proc/1/root/boot/firmware/pistomp-deploy/… — see DEPLOYMENT.md
 cd /home/pistomp/Pistomp-Mobile && bash install-on-pistomp.sh
 exit
 sudo reboot

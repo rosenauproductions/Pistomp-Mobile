@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.0 (2026-06-03) — Headless acoustic milestone
+
+**Major release:** Pistomp-Mobile is field-verified **100% compatible** with the **headless acoustic** Pi-Stomp build (overlayroot, locked SD, power-cycle tested).
+
+- Documented reference platform: [docs/MILESTONE-HEADLESS-ACOUSTIC.md](./docs/MILESTONE-HEADLESS-ACOUSTIC.md)
+- Verified: LIVE MOD control, WiFi hotspot/router + reboot persistence (chroot install), ALSA admin, overlay deploy workflow
+- Includes all fixes through **0.2.15** (WiFi boot apply, hotspot without patchbox scripts)
+
+Vanilla Pi-Stomp images remain supported; see [docs/PI-STOMP-VARIANTS.md](./docs/PI-STOMP-VARIANTS.md).
+
 ## 0.2.15 (2026-06-03)
 
 - **Fix:** WiFi boot apply crashed (`wait_for_network_manager` bytes/string).

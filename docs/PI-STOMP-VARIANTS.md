@@ -1,32 +1,46 @@
 # Pi-Stomp variants and Pistomp-Mobile install
 
-Pistomp-Mobile targets **stock Pi-Stomp images** (pi-gen-pistomp) and **custom headless builds** (overlayroot, locked SD).
+## Reference platform: headless acoustic (v1.0.0)
+
+**Pistomp-Mobile 1.0.0** is field-verified on the **headless acoustic** Pi-Stomp image (overlayroot, locked SD). Use the workflow in [MILESTONE-HEADLESS-ACOUSTIC.md](./MILESTONE-HEADLESS-ACOUSTIC.md) and [DEPLOYMENT.md](../DEPLOYMENT.md).
+
+Other Pi-Stomp builds (vanilla pi-gen, full PCB Pi 5, writable root) use the same app and install scripts; only the **deploy path** differs.
+
+---
 
 ## WiFi hotspot ↔ router (same as System menu)
 
 The Pi-Stomp LCD/System menu uses `modalapi/wifi/ops.py`:
 
-- **Hotspot:** `enable_hotspot()` — NetworkManager AP profile (`pistomp-hotspot` or `Hotspot`), same as patchbox scripts when present.
-- **Router:** `disable_hotspot()` — bring down AP, activate saved client profile (`connection.autoconnect yes` on router profiles).
+- **Hotspot:** `enable_hotspot()` — NetworkManager AP profile (`pistomp-hotspot` or `Hotspot`), plus `wifi-hotspot.service` when present.
+- **Router:** `disable_hotspot()` — bring down AP, activate saved client profile.
 
-On **vanilla Pi-Stomp** (writable root), NetworkManager profiles under `/etc/NetworkManager/system-connections/` persist across reboot. `wifi-hotspot.service` (pi-gen) starts the AP on boot unless you stay in router mode.
+On **vanilla Pi-Stomp** (writable root), NetworkManager profiles under `/etc/NetworkManager/system-connections/` persist across reboot.
 
-On **overlayroot / locked SD** (headless acoustic build), NM and systemd changes in the **live overlay are erased on reboot**. Pistomp-Mobile therefore also:
+On **overlayroot / locked SD** (headless acoustic), live NM changes are lost on reboot unless written in **chroot**. Pistomp-Mobile therefore:
 
-1. Writes **`/boot/firmware/pistomp-mobile/wifi-mode.json`** (FAT partition — survives reboot).
-2. When `/proc/1/root` is available, copies NM profiles and `systemctl --root=/proc/1/root disable|enable wifi-hotspot.service` onto the **real SD root**.
+1. Writes **`/boot/firmware/pistomp-mobile/wifi-mode.json`** (FAT — survives reboot).
+2. Installs **`pistomp-wifi-api.py`** and **`pistomp-wifi-mode-apply.service`** on the real SD via chroot (`/opt/pistomp-mobile/`).
+3. When `/proc/1/root` is available during a session, can also mirror NM/systemd state onto the real root.
 
 After changing WiFi mode in the app, verify:
 
 ```bash
 cat /boot/firmware/pistomp-mobile/wifi-mode.json
+grep '"running" in stdout' /opt/pistomp-mobile/pistomp-wifi-api.py
 ```
+
+Use **`"running"`** (0.2.15+). If you see **`b"running"`**, the old API is still on `/opt` — re-run chroot install.
+
+---
 
 ## Deploy paths
 
 | Build | Install |
 |-------|---------|
-| Overlayroot (locked SD) | Mac `scp` → stage `/boot/firmware/pistomp-deploy/` → chroot → `install-on-pistomp.sh` → reboot |
-| Writable root (vanilla) | `sudo bash install-on-pistomp.sh` in `~/Pistomp-Mobile` |
+| **Headless acoustic (overlayroot)** | Mac `scp` → `stage-on-boot-firmware.sh` → chroot → `install-on-pistomp.sh` → reboot |
+| Writable root (vanilla / some Pi 5) | `sudo bash install-on-pistomp.sh` in `~/Pistomp-Mobile` |
+
+**Do not** rely on `sudo cp` to `/opt` alone on overlayroot — it does not survive reboot.
 
 See [DEPLOYMENT.md](../DEPLOYMENT.md).
