@@ -18,6 +18,8 @@ export function EffectGrid({ plugins, onToggle, onOpenSettings }: Props) {
         const hasColor = Object.keys(vars).length > 0;
         const style = vars as CSSProperties;
 
+        const displayName = plugin.title ?? plugin.instance;
+
         return (
           <article
             key={plugin.instance}
@@ -25,7 +27,9 @@ export function EffectGrid({ plugins, onToggle, onOpenSettings }: Props) {
             style={style}
           >
             <div className="effect-head">
-              <span className="effect-name">{plugin.title ?? plugin.instance}</span>
+              <span className="effect-name" title={displayName}>
+                {displayName}
+              </span>
               <button
                 type="button"
                 className="effect-settings-btn"
