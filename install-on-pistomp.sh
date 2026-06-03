@@ -34,9 +34,16 @@ if [[ ! -d "./dist" ]]; then
 fi
 
 echo "Installing to ${INSTALL_DIR}..."
+rm -rf "${WEB_ROOT}"
 mkdir -p "${WEB_ROOT}"
-rm -rf "${WEB_ROOT:?}"/*
 cp -a dist/. "${WEB_ROOT}/"
+# Drop orphaned hashed assets from older installs (PWA cache may still request them).
+find "${WEB_ROOT}/assets" -maxdepth 1 -type f \( -name '*.js' -o -name '*.css' \) 2>/dev/null | while read -r f; do
+  base=$(basename "$f")
+  if ! grep -qF "$base" "${WEB_ROOT}/index.html" 2>/dev/null; then
+    rm -f "$f"
+  fi
+done
 
 AUDIO_API_DEST="${INSTALL_DIR}/pistomp-audio-api.py"
 if [[ -f scripts/pistomp-audio-api.py ]]; then
@@ -314,7 +321,11 @@ if ! command -v nginx >/dev/null 2>&1; then
   apt-get install -y nginx
 fi
 
-cat > "${NGINX_SITE}" <<EOF
+# Same server block for Debian sites-available and vanilla Pi-Stomp (monolithic nginx.conf).
+NGINX_SNIPPET="/etc/nginx/pistomp-mobile-8080.conf"
+write_pistomp_nginx_server() {
+  local dest="$1"
+  cat > "${dest}" <<EOF
 server {
     listen ${PORT};
     listen [::]:${PORT};
@@ -323,8 +334,17 @@ server {
     root ${WEB_ROOT};
     index index.html;
 
+    location = /index.html {
+        add_header Cache-Control "no-store, must-revalidate";
+    }
+
+    location = /manifest.webmanifest {
+        add_header Cache-Control "no-store, must-revalidate";
+    }
+
     location / {
         try_files \$uri \$uri/ /index.html;
+        add_header Cache-Control "no-store, must-revalidate";
     }
 
     location = /pistomp-last.json {
@@ -384,8 +404,47 @@ server {
     }
 }
 EOF
+}
 
-ln -sf "${NGINX_SITE}" "${NGINX_ENABLED}"
+if [[ -d /etc/nginx/sites-available ]]; then
+  write_pistomp_nginx_server "${NGINX_SITE}"
+  mkdir -p /etc/nginx/sites-enabled
+  ln -sf "${NGINX_SITE}" "${NGINX_ENABLED}"
+  echo "nginx: installed site ${NGINX_SITE} (Debian layout)"
+elif [[ -f "${NGINX_SNIPPET}" ]] \
+  || grep -q 'pistomp-mobile-8080.conf' /etc/nginx/nginx.conf 2>/dev/null \
+  || grep -q "listen ${PORT}" /etc/nginx/nginx.conf 2>/dev/null; then
+  write_pistomp_nginx_server "${NGINX_SNIPPET}"
+  if grep -q "listen ${PORT}" /etc/nginx/nginx.conf 2>/dev/null \
+    && ! grep -q 'pistomp-mobile-8080.conf' /etc/nginx/nginx.conf 2>/dev/null; then
+    cp -a /etc/nginx/nginx.conf "/etc/nginx/nginx.conf.bak.$(date +%Y%m%d%H%M%S)"
+    python3 <<'PY'
+import re
+from pathlib import Path
+
+conf = Path("/etc/nginx/nginx.conf")
+text = conf.read_text()
+pat = re.compile(
+    r"    server \{.*?listen\s+8080.*?\n    \}\n",
+    re.DOTALL,
+)
+if not pat.search(text):
+    raise SystemExit("Could not find embedded listen 8080 server block in nginx.conf")
+text = pat.sub("    include /etc/nginx/pistomp-mobile-8080.conf;\n", text, count=1)
+conf.write_text(text)
+PY
+  fi
+  echo "nginx: updated ${NGINX_SNIPPET} (vanilla Pi-Stomp layout)"
+elif [[ -d /etc/nginx/conf.d ]]; then
+  write_pistomp_nginx_server "/etc/nginx/conf.d/pistomp-mobile.conf"
+  grep -q 'conf.d/\*\.conf' /etc/nginx/nginx.conf 2>/dev/null \
+    || sed -i '/^http {/a\    include /etc/nginx/conf.d/*.conf;' /etc/nginx/nginx.conf
+  echo "nginx: installed /etc/nginx/conf.d/pistomp-mobile.conf"
+else
+  echo "ERROR: unsupported nginx layout (no sites-available, conf.d, or listen ${PORT} in nginx.conf)"
+  exit 1
+fi
+
 nginx -t
 if [[ "${IN_CHROOT}" -eq 0 ]]; then
   systemctl reload nginx

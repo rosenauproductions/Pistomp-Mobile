@@ -72,7 +72,9 @@ export function useStomp() {
       const { bundle: resolved, info } = await modui.getLivePedalboardState(bundle);
       setActiveBundle(resolved);
       if (opts?.replacePlugins && info.plugins.length === 0) {
-        throw new Error("Pedalboard has no effects yet — try Change pedalboard again");
+        throw new Error(
+          "MOD returned no effects yet — wait a moment and tap Change pedalboard again",
+        );
       }
       setBoard((prev) => {
         const plugins = modui.applyPluginsAfterRefresh(prev.plugins, info.plugins, {
@@ -122,7 +124,13 @@ export function useStomp() {
             setError("Could not load pedalboard into MOD — try Change pedalboard again");
           }
         }
-        await refreshBoard(initial, true, { replacePlugins: true });
+        try {
+          await refreshBoard(initial, true, { replacePlugins: true });
+        } catch (e) {
+          setError(
+            e instanceof Error ? e.message : "Could not refresh pedalboard from MOD",
+          );
+        }
       }
       setDirty(false);
       await refreshHardwareInput();

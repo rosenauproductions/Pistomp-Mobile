@@ -775,12 +775,12 @@ export async function getPedalboardInfo(bundlepath: string): Promise<PedalboardI
 /** Pi load_bundle can lag; retry before showing an empty grid. */
 export async function getPedalboardInfoWithRetry(
   bundlepath: string,
-  attempts = 5,
+  attempts = 8,
 ): Promise<PedalboardInfo> {
   let last = await getPedalboardInfo(bundlepath);
   if (!isPiStompMode() || last.plugins.length > 0) return last;
   for (let i = 1; i < attempts; i++) {
-    await delay(350);
+    await delay(i < 3 ? 400 : 600);
     last = await getPedalboardInfo(bundlepath);
     if (last.plugins.length > 0) return last;
   }

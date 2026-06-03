@@ -39,7 +39,11 @@ Use **`"running"`** (0.2.15+). If you see **`b"running"`**, the old API is still
 | Build | Install |
 |-------|---------|
 | **Headless acoustic (overlayroot)** | Mac `scp` → `stage-on-boot-firmware.sh` → chroot → `install-on-pistomp.sh` → reboot |
-| Writable root (vanilla / some Pi 5) | `sudo bash install-on-pistomp.sh` in `~/Pistomp-Mobile` |
+| Writable root (vanilla / some Pi 5) | Mac `scp` → `sudo bash install-on-pistomp.sh` in `~/Pistomp-Mobile` (no chroot) |
+
+**Same Mac build** (`npm run build` + `dist/` + `scripts/`) for every image. Only deployment differs.
+
+**nginx layout:** Raspberry Pi OS / headless images use `/etc/nginx/sites-available/pistomp-mobile`. Many **vanilla Pi-Stomp** images ship a single `/etc/nginx/nginx.conf` with an embedded `listen 8080` block — `install-on-pistomp.sh` (1.0.0+) writes `/etc/nginx/pistomp-mobile-8080.conf` and replaces that block with `include` (old `/pistomp/` → audio-only proxy is upgraded to `/pistomp/audio/` + `/pistomp/wifi/`).
 
 **Do not** rely on `sudo cp` to `/opt` alone on overlayroot — it does not survive reboot.
 
