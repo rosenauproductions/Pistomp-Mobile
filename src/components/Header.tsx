@@ -30,7 +30,7 @@ export function Header({
       </button>
       <div className="header-main">
         <h1>{title}</h1>
-        <div className="sub">Pi-Stomp Mobile</div>
+        <div className="sub">PiStomp-Mobile</div>
       </div>
       {dirty && (
         <button

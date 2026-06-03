@@ -1,6 +1,6 @@
 {
-  "name": "PiStomp Mobile",
-  "short_name": "PiStomp",
+  "name": "PiStomp-Mobile",
+  "short_name": "PiStomp-Mobile",
   "description": "Mobile controller for Pi-Stomp / MOD-UI",
   "start_url": "/",
   "display": "standalone",
