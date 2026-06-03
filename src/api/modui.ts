@@ -475,7 +475,9 @@ async function probePiStompSet(
 /** Safe HTTP probes for Settings QA (never calls /reset — that wipes the live graph). */
 export async function runConnectionProbes(
   plugin: EffectPlugin | undefined,
+  opts?: { includePiStompHttpProbes?: boolean },
 ): Promise<string[]> {
+  const includePiStompHttp = opts?.includePiStompHttpProbes ?? true;
   const lines: string[] = [];
   lines.push("  (skipped GET /reset/ — destructive; clears all effects on the Pi)");
   lines.push(await fetchProbe("/pedalboard/current"));
@@ -511,17 +513,21 @@ export async function runConnectionProbes(
     );
   }
 
-  lines.push("  pi_stomp_set bypass probes:");
-  lines.push(...(await probePiStompSet(plugin.instance, ":bypass", plugin.bypassed ? 0 : 1)));
+  if (includePiStompHttp) {
+    lines.push("  pi_stomp_set bypass probes:");
+    lines.push(...(await probePiStompSet(plugin.instance, ":bypass", plugin.bypassed ? 0 : 1)));
 
-  if (tonePort) {
-    const testVal = Math.min(tonePort.maximum ?? 1, Math.max(tonePort.minimum ?? 0, tonePort.value));
-    lines.push(`  pi_stomp_set param "${tonePort.symbol}" probe:`);
-    lines.push(...(await probePiStompSet(plugin.instance, tonePort.symbol, testVal)));
+    if (tonePort) {
+      const testVal = Math.min(tonePort.maximum ?? 1, Math.max(tonePort.minimum ?? 0, tonePort.value));
+      lines.push(`  pi_stomp_set param "${tonePort.symbol}" probe:`);
+      lines.push(...(await probePiStompSet(plugin.instance, tonePort.symbol, testVal)));
+    }
+
+    const getPath = `/effect/parameter/pi_stomp_get//graph${piStompInstanceSuffix(plugin.instance)}/:bypass`;
+    lines.push(await fetchProbe(getPath));
+  } else {
+    lines.push("  (skipped pi_stomp_set HTTP probes — use WebSocket stomps on this Pi)");
   }
-
-  const getPath = `/effect/parameter/pi_stomp_get//graph${piStompInstanceSuffix(plugin.instance)}/:bypass`;
-  lines.push(await fetchProbe(getPath));
 
   return lines;
 }

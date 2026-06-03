@@ -77,7 +77,9 @@ export async function collectQaReport(ctx: QaContext): Promise<string> {
   lines.push("");
 
   lines.push("--- Live probes (run now) ---");
-  const probes = await modui.runConnectionProbes(collision);
+  const probes = await modui.runConnectionProbes(collision, {
+    includePiStompHttpProbes: !isOnPiStompDevice(),
+  });
   lines.push(probes.join("\n"));
   lines.push("");
 

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import type { ConnectionMode } from "../api/types";
 import type { HardwareInputState } from "../api/pistompAudio";
 import type { WifiStatus } from "../api/pistompWifi";
+import { InstallHealthPanel } from "./InstallHealthPanel";
+import { NetworkHints } from "./NetworkHints";
 import { WifiAdminControls } from "./WifiAdminControls";
 import { getAppVersionLabel } from "../lib/appVersion";
 import {
@@ -27,6 +29,7 @@ interface Props {
   onShowHardwareInputChange: (visible: boolean) => void;
   onTest: () => void;
   onCollectQa: () => Promise<string>;
+  wifiStatus: WifiStatus | null;
 }
 
 export function SettingsSheet({
@@ -45,11 +48,14 @@ export function SettingsSheet({
   onShowHardwareInputChange,
   onTest,
   onCollectQa,
+  wifiStatus,
 }: Props) {
   const [value, setValue] = useState(host);
   const [runtime, setRuntime] = useState(runtimeMode);
   const [alsaControl, setAlsaControl] = useState(hardwareInput?.control ?? "");
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [qaOpen, setQaOpen] = useState(false);
+  const onDevice = isOnPiStompDevice();
   const [qaText, setQaText] = useState("");
   const [qaBusy, setQaBusy] = useState(false);
   const [qaCopied, setQaCopied] = useState(false);
@@ -104,6 +110,7 @@ export function SettingsSheet({
             <div className="admin-subsection">
               <span className="admin-subsection-label">WiFi</span>
               <WifiAdminControls available={wifiAdminAvailable} onRefresh={onRefreshWifi} />
+              <NetworkHints status={wifiStatus} />
             </div>
 
             <div className="admin-subsection">
@@ -183,16 +190,24 @@ export function SettingsSheet({
           </div>
         )}
 
-        <label>
-          <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>Host URL</span>
-          <input
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            placeholder="(same origin)"
-            autoCapitalize="off"
-            autoCorrect="off"
-          />
-        </label>
+        {!onDevice && (
+          <label>
+            <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>Host URL</span>
+            <input
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              placeholder="(same origin)"
+              autoCapitalize="off"
+              autoCorrect="off"
+            />
+          </label>
+        )}
+        {onDevice && (
+          <p className="runtime-mode-hint">
+            Host URL is automatic on the Pi (<code>:8080</code> same-origin). Use Advanced only if
+            support asks you to change it.
+          </p>
+        )}
         <button
           type="button"
           className="btn-primary"
@@ -200,15 +215,17 @@ export function SettingsSheet({
             if (showRuntime && runtime !== runtimeMode) {
               onRuntimeModeChange(runtime);
             }
-            onSave(value);
+            onSave(onDevice ? "" : value);
             onClose();
           }}
         >
-          Save & reconnect
+          {onDevice ? "Reconnect" : "Save & reconnect"}
         </button>
-        <button type="button" className="btn-ghost" onClick={onTest}>
-          Test connection ({mode})
-        </button>
+        {!onDevice && (
+          <button type="button" className="btn-ghost" onClick={onTest}>
+            Test connection ({mode})
+          </button>
+        )}
         {showRuntime && runtime === "modDesktop" && (
           <p className="runtime-mode-hint">
             Keep MOD Desktop running. WebSocket opens on first stomp (not at page load).
@@ -219,38 +236,68 @@ export function SettingsSheet({
           <button
             type="button"
             className="btn-ghost qa-toggle-btn"
-            aria-expanded={qaOpen}
-            onClick={() => setQaOpen((v) => !v)}
+            aria-expanded={advancedOpen}
+            onClick={() => setAdvancedOpen((v) => !v)}
           >
-            {qaOpen ? "Hide QA report" : "Show QA report"}
+            {advancedOpen ? "Hide Advanced" : "Advanced"}
           </button>
-          {qaOpen && (
+          {advancedOpen && (
             <>
-              <p className="runtime-mode-hint">
-                Tap a stomp or slider first, then Refresh — the log captures what the app tried.
-                Probes are read-only (they do not call <code>/reset/</code>, which would delete all
-                effects on the Pi).
-              </p>
-              <textarea
-                className="qa-textarea"
-                readOnly
-                value={qaBusy ? "Running probes…" : qaText}
-                rows={14}
-                aria-label="QA diagnostic report"
-              />
-              <div className="qa-actions">
-                <button type="button" className="btn-ghost" onClick={() => void refreshQa()} disabled={qaBusy}>
-                  {qaBusy ? "Refreshing…" : "Refresh QA"}
-                </button>
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={() => void copyQa()}
-                  disabled={!qaText || qaBusy}
-                >
-                  {qaCopied ? "Copied" : "Copy QA"}
-                </button>
-              </div>
+              {onDevice && (
+                <label>
+                  <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>Host URL (override)</span>
+                  <input
+                    value={value}
+                    onChange={(e) => setValue(e.target.value)}
+                    placeholder="(same origin)"
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                  />
+                </label>
+              )}
+              <InstallHealthPanel />
+              <button
+                type="button"
+                className="btn-ghost qa-toggle-btn"
+                aria-expanded={qaOpen}
+                onClick={() => setQaOpen((v) => !v)}
+              >
+                {qaOpen ? "Hide QA report" : "Show QA report"}
+              </button>
+              {qaOpen && (
+                <>
+                  <p className="runtime-mode-hint">
+                    Tap a stomp or slider first, then Refresh — the log captures what the app tried.
+                    Probes are read-only (they do not call <code>/reset/</code>, which would delete all
+                    effects on the Pi).
+                  </p>
+                  <textarea
+                    className="qa-textarea"
+                    readOnly
+                    value={qaBusy ? "Running probes…" : qaText}
+                    rows={14}
+                    aria-label="QA diagnostic report"
+                  />
+                  <div className="qa-actions">
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      onClick={() => void refreshQa()}
+                      disabled={qaBusy}
+                    >
+                      {qaBusy ? "Refreshing…" : "Refresh QA"}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      onClick={() => void copyQa()}
+                      disabled={!qaText || qaBusy}
+                    >
+                      {qaCopied ? "Copied" : "Copy QA"}
+                    </button>
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>

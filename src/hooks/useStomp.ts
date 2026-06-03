@@ -13,9 +13,11 @@ import * as pistompWifi from "../api/pistompWifi";
 import type { WifiStatus } from "../api/pistompWifi";
 import { getShowHardwareInput, setShowHardwareInput as persistShowHardwareInput } from "../lib/adminPrefs";
 import { collectQaReport } from "../lib/diagnostics";
+import { EMPTY_PEDALBOARD } from "../lib/emptyBoard";
 import {
   getRuntimeMode,
   isModDesktopMode,
+  isOnPiStompDevice,
   isPiStompMode,
   setRuntimeMode,
   type RuntimeMode,
@@ -29,12 +31,20 @@ import type {
   SnapshotsMap,
 } from "../api/types";
 
+const deviceStartsOffline = typeof window !== "undefined" && isOnPiStompDevice();
+
 export function useStomp() {
-  const [mode, setMode] = useState<ConnectionMode>("demo");
+  const [mode, setMode] = useState<ConnectionMode>(deviceStartsOffline ? "offline" : "demo");
   const [host, setHostState] = useState(modui.getHost);
-  const [pedalboards, setPedalboards] = useState<PedalboardSummary[]>(demo.DEMO_PEDALBOARDS);
-  const [activeBundle, setActiveBundle] = useState(demo.DEMO_PEDALBOARDS[0].bundle);
-  const [board, setBoard] = useState<PedalboardInfo>(demo.DEMO_BOARD);
+  const [pedalboards, setPedalboards] = useState<PedalboardSummary[]>(
+    deviceStartsOffline ? [] : demo.DEMO_PEDALBOARDS,
+  );
+  const [activeBundle, setActiveBundle] = useState(
+    deviceStartsOffline ? "" : demo.DEMO_PEDALBOARDS[0].bundle,
+  );
+  const [board, setBoard] = useState<PedalboardInfo>(
+    deviceStartsOffline ? EMPTY_PEDALBOARD : demo.DEMO_BOARD,
+  );
   const [snapshots, setSnapshots] = useState<SnapshotsMap>(demo.DEMO_SNAPSHOTS);
   const [activeSnapshot, setActiveSnapshot] = useState<string | null>("0");
   const [globals, setGlobals] = useState<GlobalControl[]>(demo.DEMO_GLOBALS);
@@ -47,6 +57,9 @@ export function useStomp() {
   const [showHardwareInput, setShowHardwareInputState] = useState(getShowHardwareInput);
   const [wsConnected, setWsConnected] = useState(false);
   const [connectAttempted, setConnectAttempted] = useState(false);
+  const [modReachable, setModReachable] = useState(false);
+  const [busyMessage, setBusyMessage] = useState<string | null>(null);
+  const [wifiStatus, setWifiStatus] = useState<WifiStatus | null>(null);
 
   const markDirty = useCallback(() => setDirty(true), []);
 
@@ -57,6 +70,7 @@ export function useStomp() {
 
   const refreshWifiStatus = useCallback(async (): Promise<WifiStatus | null> => {
     const status = await pistompWifi.fetchWifiStatus();
+    setWifiStatus(status);
     setWifiAdminAvailable(status != null);
     return status;
   }, []);
@@ -96,27 +110,32 @@ export function useStomp() {
   const connect = useCallback(async () => {
     setError(null);
     setBusy(true);
+    setBusyMessage("Connecting to MOD…");
     setConnectAttempted(true);
     try {
       if (modui.fixHostForCurrentOrigin()) {
         setHostState("");
       }
       await modui.testConnection();
+      setModReachable(true);
       setMode("live");
       modui.warmWebSocketForLiveSession();
-      const list = await modui.listPedalboards().then((pbs) => pbs.filter((p) => !p.broken));
+      const list = await modui.listPedalboards();
       setPedalboards(list);
+      const loadable = list.filter((p) => !p.broken);
       const current = await modui.getCurrentPedalboardBundle();
       const initial =
         (current && current.length > 0 ? current : null) ??
-        (list.find((p) => p.bundle === activeBundle)?.bundle ?? list[0]?.bundle);
+        (loadable.find((p) => p.bundle === activeBundle)?.bundle ?? loadable[0]?.bundle);
       if (initial) {
+        const pbTitle = list.find((p) => p.bundle === initial)?.title ?? "pedalboard";
         setActiveBundle(initial);
         if (isPiStompMode()) {
+          setBusyMessage(`Loading ${pbTitle}…`);
           const wsOk = await modui.ensureWebSocketReady();
           if (!wsOk) {
             setError(
-              "WebSocket to MOD failed — re-run install-on-pistomp.sh (nginx /websocket Origin fix)",
+              "WebSocket to MOD failed — stomps need WS (HTTP pi_stomp_set may be unavailable on this image). Re-run install-on-pistomp.sh if /websocket fails.",
             );
           }
           const loaded = await modui.syncHostPedalboard(initial);
@@ -136,16 +155,29 @@ export function useStomp() {
       await refreshHardwareInput();
       await refreshWifiStatus();
     } catch (e) {
-      setMode("demo");
-      setPedalboards(demo.DEMO_PEDALBOARDS);
-      setBoard(demo.DEMO_BOARD);
-      setGlobals(demo.DEMO_GLOBALS);
-      setSnapshots(demo.DEMO_SNAPSHOTS);
-      setHardwareInput(null);
-      setWifiAdminAvailable(false);
+      setModReachable(false);
+      if (isOnPiStompDevice()) {
+        setMode("offline");
+        setPedalboards([]);
+        setBoard(EMPTY_PEDALBOARD);
+        setGlobals([]);
+        setSnapshots({});
+        setHardwareInput(null);
+        setWifiAdminAvailable(false);
+        setWifiStatus(null);
+      } else {
+        setMode("demo");
+        setPedalboards(demo.DEMO_PEDALBOARDS);
+        setBoard(demo.DEMO_BOARD);
+        setGlobals(demo.DEMO_GLOBALS);
+        setSnapshots(demo.DEMO_SNAPSHOTS);
+        setHardwareInput(null);
+        setWifiAdminAvailable(false);
+      }
       setError(e instanceof Error ? e.message : "Cannot reach Pi-Stomp");
     } finally {
       setBusy(false);
+      setBusyMessage(null);
     }
   }, [activeBundle, refreshBoard, refreshHardwareInput, refreshWifiStatus]);
 
@@ -217,7 +249,16 @@ export function useStomp() {
   }, [mode, activeBundle, refreshBoard]);
 
   const selectPedalboard = async (pb: PedalboardSummary) => {
+    if (pb.broken) {
+      setError(`${pb.title} is broken on this Pi (missing plugins).`);
+      return;
+    }
+    if (mode === "offline") {
+      setError("Not connected — tap ↻ Reconnect first.");
+      return;
+    }
     setBusy(true);
+    setBusyMessage(`Loading ${pb.title}…`);
     setError(null);
     setBoard((prev) => ({ ...prev, title: pb.title }));
     try {
@@ -238,6 +279,7 @@ export function useStomp() {
       }
     } finally {
       setBusy(false);
+      setBusyMessage(null);
     }
   };
 
@@ -426,9 +468,22 @@ export function useStomp() {
 
   const activeCount = board.plugins.filter((p) => !p.bypassed).length;
   const connectionBroken =
-    mode === "demo" || (mode === "live" && connectAttempted && !busy && !wsConnected);
+    mode === "offline" ||
+    (mode === "live" && connectAttempted && !busy && !wsConnected);
   const boardEmptyWarning =
     mode === "live" && board.plugins.length === 0 && connectAttempted && !busy;
+
+  const connectionStatusLine = (() => {
+    if (mode === "offline") return "MOD unreachable — tap ↻ to reconnect";
+    if (mode === "demo") return "Demo mode (not connected to Pi)";
+    if (!modReachable) return "Connecting…";
+    const parts = ["MOD OK"];
+    parts.push(wsConnected ? "WS connected" : "WS down (stomps may not work)");
+    if (board.plugins.length > 0) {
+      parts.push(`${board.plugins.length} effects`);
+    }
+    return parts.join(" · ");
+  })();
 
   const collectQa = useCallback(
     () =>
@@ -462,7 +517,11 @@ export function useStomp() {
     error,
     activeCount,
     connectionBroken,
+    connectionStatusLine,
     boardEmptyWarning,
+    busyMessage,
+    wifiStatus,
+    modReachable,
     connect,
     selectPedalboard,
     toggleBypass,

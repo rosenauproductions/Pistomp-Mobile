@@ -7,6 +7,7 @@ import { Header } from "./components/Header";
 import { PedalboardSheet } from "./components/PedalboardSheet";
 import { SettingsSheet } from "./components/SettingsSheet";
 import { SnapshotBar } from "./components/SnapshotBar";
+import { ConnectionStatusBar } from "./components/ConnectionStatusBar";
 import { useStomp } from "./hooks/useStomp";
 import type { EffectPlugin } from "./api/types";
 
@@ -24,7 +25,7 @@ export default function App() {
     effectSettingsInstance != null ? stomp.getPlugin(effectSettingsInstance) ?? null : null;
 
   return (
-    <div className={`app ${stomp.busy ? "busy-overlay" : ""}`}>
+    <div className={`app ${stomp.busy ? "busy-overlay" : ""}`} aria-busy={stomp.busy}>
       <Header
         title={stomp.board.title}
         mode={stomp.mode}
@@ -37,7 +38,22 @@ export default function App() {
         onReconnect={() => void stomp.connect()}
       />
 
+      {stomp.busy && stomp.busyMessage && (
+        <div className="busy-banner" role="status">
+          {stomp.busyMessage}
+        </div>
+      )}
+
+      <ConnectionStatusBar line={stomp.connectionStatusLine} broken={stomp.connectionBroken} />
+
       <main className="main">
+        {stomp.mode === "offline" && (
+          <div className="board-warning" role="alert">
+            <strong>Not connected to MOD.</strong> Tap <em>↻</em> in the header or fix the network
+            URL in Settings → Advanced.
+          </div>
+        )}
+
         {stomp.boardEmptyWarning && (
           <div className="board-warning" role="alert">
             <strong>Empty pedalboard.</strong> MOD returned no effects for this board. Use{" "}
@@ -108,6 +124,7 @@ export default function App() {
         onShowHardwareInputChange={stomp.setShowHardwareInput}
         onTest={() => void stomp.connect()}
         onCollectQa={stomp.collectQa}
+        wifiStatus={stomp.wifiStatus}
       />
 
       <EffectSettingsSheet

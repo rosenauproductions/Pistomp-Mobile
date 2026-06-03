@@ -2,7 +2,16 @@
 
 This guide walks through putting the mobile web UI on your Pi-Stomp so you can control it from a phone over the built-in Wi‑Fi hotspot — **no internet required**.
 
-**v1.0.0** is verified on the **headless acoustic** image (overlayroot, locked SD). That workflow is the primary path below. Milestone checklist: [docs/MILESTONE-HEADLESS-ACOUSTIC.md](./docs/MILESTONE-HEADLESS-ACOUSTIC.md).
+## Which Pi-Stomp image do you have?
+
+| Your build | Install path in this guide |
+|------------|----------------------------|
+| **Vanilla Pi-Stomp** (writable SD, full PCB, Cam-style image) | [Writable root (vanilla)](#writable-root-unusual) — Mac `scp` → `sudo bash install-on-pistomp.sh` |
+| **Headless acoustic** (overlayroot, locked SD) | [Read-only root (overlayroot)](#read-only-root-overlayroot--locked-sd--verified-workflow) — stage on FAT → chroot → reboot |
+
+Same Mac build (`npm run build`) for both. Details: [docs/PI-STOMP-VARIANTS.md](./docs/PI-STOMP-VARIANTS.md).
+
+**v1.0.0+** is verified on **headless acoustic**; **vanilla** uses the same app with the simpler install path above. Headless milestone checklist: [docs/MILESTONE-HEADLESS-ACOUSTIC.md](./docs/MILESTONE-HEADLESS-ACOUSTIC.md).
 
 ## What you are installing
 
@@ -271,9 +280,9 @@ systemctl is-active pistomp-wifi-api.service
 
 **Later updates (dist only, nginx unchanged):** Same staging + chroot copy, then either `bash install-on-pistomp.sh` (full) or `bash update-dist-on-pistomp.sh` if you only changed the UI bundle.
 
-### Writable root (unusual)
+### Writable root (vanilla Pi-Stomp)
 
-If your image is not overlayroot, a normal install is enough:
+If your image is **not** overlayroot (no `overlayroot` in `mount`), a normal install is enough:
 
 ```bash
 cd ~/Pistomp-Mobile

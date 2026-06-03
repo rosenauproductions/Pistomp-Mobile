@@ -59,7 +59,7 @@ export function Header({
           </span>
         </div>
       ) : (
-        <span className={`badge ${mode}`}>{mode}</span>
+        <span className={`badge ${mode === "offline" ? "broken" : mode}`}>{mode}</span>
       )}
       <button type="button" className="icon-btn" onClick={onSettings} aria-label="Connection settings">
         ⚙

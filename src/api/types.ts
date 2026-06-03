@@ -1,4 +1,4 @@
-export type ConnectionMode = "live" | "demo";
+export type ConnectionMode = "live" | "demo" | "offline";
 
 export interface PedalboardSummary {
   title: string;

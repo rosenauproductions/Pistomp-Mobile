@@ -704,6 +704,101 @@ input {
   color: var(--accent);
 }
 
+.sheet-item.broken {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.sheet-item-tag {
+  margin-left: 0.5rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  color: var(--danger);
+  letter-spacing: 0.04em;
+}
+
+.connection-status {
+  margin: 0;
+  padding: 0.4rem 1rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.connection-status.broken {
+  color: var(--danger);
+}
+
+.busy-banner {
+  padding: 0.45rem 1rem;
+  font-size: 0.8rem;
+  text-align: center;
+  background: var(--surface-2);
+  color: var(--accent);
+  border-bottom: 1px solid var(--border);
+}
+
+.network-hints {
+  margin-top: 0.5rem;
+}
+
+.network-hints-list {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+}
+
+.network-hints-list a {
+  color: var(--accent);
+  word-break: break-all;
+}
+
+.network-hints-tag {
+  margin-left: 0.35rem;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.install-health {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.install-health-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.78rem;
+}
+
+.install-health-list li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 0.5rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.install-health-list li.fail .install-health-name {
+  color: var(--danger);
+}
+
+.install-health-detail {
+  grid-column: 2;
+  color: var(--muted);
+  word-break: break-word;
+}
+
+.install-health-mark {
+  font-weight: 700;
+}
+
+.install-health-list li.ok .install-health-mark {
+  color: var(--accent);
+}
+
 .settings-form {
   padding: 1rem;
   display: flex;
