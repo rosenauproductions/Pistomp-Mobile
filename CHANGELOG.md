@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.15 (2026-06-03)
+
+- **Fix:** WiFi boot apply crashed (`wait_for_network_manager` bytes/string).
+- **Fix:** Hotspot mode on images without patchbox scripts — always run NM `enable_hotspot` + start `wifi-hotspot.service`, disconnect router first; return error if AP still not active.
+
 ## 0.2.14 (2026-06-02)
 
 - **WiFi:** Persist mode like pi-stomp (patchbox scripts + NM) and write to **FAT** `/boot/firmware/pistomp-mobile/wifi-mode.json` plus real SD via `/proc/1/root` (overlayroot). Copies NM profiles and disables `wifi-hotspot.service` on SD for router mode.

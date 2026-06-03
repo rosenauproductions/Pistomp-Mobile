@@ -330,10 +330,19 @@ def wait_for_network_manager(timeout: int = 45) -> bool:
     for _ in range(timeout):
         stdout, err = nmcli(["-t", "-f", "RUNNING", "general"], timeout=5)
         if err is None and stdout:
-            if b"running" in stdout.decode("utf-8", "replace").lower():
+            if "running" in stdout.decode("utf-8", "replace").lower():
                 return True
         time.sleep(1)
     return False
+
+
+def disconnect_client_profiles() -> None:
+    for c in list_client_connections():
+        nmcli(["connection", "down", c["name"]], timeout=20)
+
+
+def is_hotspot_active() -> bool:
+    return read_wifi_status().get("mode") == "hotspot"
 
 
 def apply_saved_wifi_mode() -> tuple[bool, Optional[str]]:
@@ -352,12 +361,12 @@ def apply_router_mode(router_connection: Optional[str] = None, persist: bool = F
     router_name = pick_router_connection(
         str(router_connection) if router_connection else None,
     )
-    if run_script(DISABLE_SCRIPTS) is not None:
-        err = disable_hotspot_pi_stomp()
-        if err is not None:
-            text = err.decode("utf-8", "replace")
-            if not router_name:
-                return False, text
+    for ap in list_ap_profile_names():
+        nmcli(["connection", "down", ap], timeout=20)
+    run_script(DISABLE_SCRIPTS)
+    err = disable_hotspot_pi_stomp()
+    if err is not None and not router_name:
+        return False, err.decode("utf-8", "replace")
     systemctl_wifi_hotspot_service(False)
     if router_name:
         _, err = nmcli(["connection", "up", router_name], timeout=45)
@@ -369,12 +378,27 @@ def apply_router_mode(router_connection: Optional[str] = None, persist: bool = F
 
 
 def apply_hotspot_mode(persist: bool = False) -> tuple[bool, Optional[str]]:
-    if not persist:
-        systemctl_wifi_hotspot_service(True)
-    if run_script(ENABLE_SCRIPTS) is not None:
+    """pi-stomp ops.enable_hotspot + wifi-hotspot.service (no patchbox scripts on some images)."""
+    disconnect_client_profiles()
+    systemctl_wifi_hotspot_service(True)
+    run_script(ENABLE_SCRIPTS)
+    err = enable_hotspot_pi_stomp()
+    if err is not None:
+        try:
+            subprocess.run(
+                ["systemctl", "start", "wifi-hotspot.service"],
+                capture_output=True,
+                timeout=60,
+                check=False,
+            )
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
         err = enable_hotspot_pi_stomp()
-        if err is not None:
-            return False, err.decode("utf-8", "replace")
+    if err is not None:
+        return False, err.decode("utf-8", "replace")
+    if not is_hotspot_active():
+        conn = read_wifi_status().get("connectionName") or "unknown"
+        return False, f"Hotspot did not activate (still on {conn})"
     if persist:
         persist_wifi_mode_to_sd("hotspot")
     return True, None
@@ -398,7 +422,7 @@ def read_hotspot_credentials() -> tuple[str, str]:
         timeout=10,
     )
     if err2 is None and stdout2:
-        text = stdout2.decode("utf-8", "replace").strip()
+        text = stdout2.decode("utf-8", "replace").strip().splitlines()[0].strip()
         if text and text != "--":
             psk = text
     return ssid, psk
