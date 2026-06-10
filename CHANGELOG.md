@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+Work in progress on `main` (target **1.2.0**). Stable **1.1.0** is frozen on tag `v1.1.0` and branch `release/1.1.x` — hotfixes only there.
+
+## 1.1.0 (2026-06-03)
+
+- **Pi device:** Offline mode instead of demo when MOD unreachable; connection status bar and load banner
+- **Settings:** Network URL hints, Advanced (install health check, QA); Host URL hidden on Pi
+- **UI:** Long effect names truncate with fade; home screen name **PiStomp-Mobile**
+- **Install:** Vanilla monolithic nginx (`pistomp-mobile-8080.conf`); asset cleanup and no-store cache headers
+- **Docs:** DEPLOYMENT vanilla vs headless chooser
+
+Verified on vanilla Pi-Stomp and headless acoustic (overlayroot).
+
 ## 1.0.0 (2026-06-03) — Headless acoustic milestone
 
 **Major release:** Pistomp-Mobile is field-verified **100% compatible** with the **headless acoustic** Pi-Stomp build (overlayroot, locked SD, power-cycle tested).
