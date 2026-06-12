@@ -52,17 +52,34 @@ if [[ ! -f "./install-on-pistomp.sh" ]]; then
   exit 1
 fi
 
+overlayroot_chroot_bin() {
+  local p
+  for p in /usr/sbin/overlayroot-chroot /sbin/overlayroot-chroot; do
+    if [[ -x "${p}" ]]; then
+      echo "${p}"
+      return 0
+    fi
+  done
+  command -v overlayroot-chroot 2>/dev/null || true
+}
+
 uses_overlayroot() {
-  if ! command -v overlayroot-chroot >/dev/null 2>&1; then
+  local chroot_bin
+  chroot_bin="$(overlayroot_chroot_bin)"
+  if [[ -z "${chroot_bin}" ]]; then
     return 1
   fi
-  if [[ -f /etc/overlayroot.conf ]] && grep -qE '^overlayroot="?[^"]*overlay' /etc/overlayroot.conf 2>/dev/null; then
-    return 0
+  if ! findmnt -n -o FSTYPE / 2>/dev/null | grep -q '^overlay$'; then
+    return 1
   fi
-  if findmnt -n -o FSTYPE / 2>/dev/null | grep -q overlay; then
-    return 0
+  if [[ -f /etc/overlayroot.conf ]]; then
+    local setting
+    setting="$(grep -E '^overlayroot=' /etc/overlayroot.conf 2>/dev/null | grep -v '^#' | tail -1 || true)"
+    if [[ "${setting}" == *disabled* ]] || [[ -z "${setting}" ]]; then
+      return 1
+    fi
   fi
-  return 1
+  return 0
 }
 
 install_writable() {
@@ -73,11 +90,13 @@ install_writable() {
 }
 
 install_overlayroot() {
+  local chroot_bin
+  chroot_bin="$(overlayroot_chroot_bin)"
   echo "Overlayroot detected — staging on /boot/firmware, then chroot install..."
   bash "${REPO_ROOT}/scripts/stage-on-boot-firmware.sh" "${REPO_ROOT}"
 
   echo "Running install inside overlayroot-chroot..."
-  if ! sudo overlayroot-chroot /bin/bash -c '
+  if ! sudo "${chroot_bin}" /bin/bash -c '
 set -euo pipefail
 mkdir -p /home/pistomp/Pistomp-Mobile
 cp -a /proc/1/root/boot/firmware/pistomp-deploy/dist \
