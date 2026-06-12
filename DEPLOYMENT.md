@@ -33,6 +33,18 @@ bash scripts/install-pistomp-mobile.sh --reboot
 
 After reboot, open **http://pistomp.local:8080** on the Pi hotspot. Leave **Host** empty in app settings.
 
+### Migrating from Mac SCP copy
+
+If `~/Pistomp-Mobile` was installed via chroot, some files may be **owned by root** and `mv` will fail. Fix ownership first:
+
+```bash
+sudo chown -R pistomp:pistomp ~/Pistomp-Mobile
+mv ~/Pistomp-Mobile ~/Pistomp-Mobile.scp-backup
+git clone https://github.com/rosenauproductions/Pistomp-Mobile.git ~/Pistomp-Mobile
+cd ~/Pistomp-Mobile
+bash scripts/install-pistomp-mobile.sh --reboot
+```
+
 ### Updates
 
 On home Wi‑Fi (or any network with GitHub access):
