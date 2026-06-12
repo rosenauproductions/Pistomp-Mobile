@@ -29,7 +29,14 @@ if [[ "${_sysctl_out}" == *"chroot"* ]] || [[ "${_sysctl_out}" == *"Chroot"* ]];
 fi
 
 if [[ ! -d "./dist" ]]; then
-  echo "Missing ./dist — run 'npm run build' on your machine and copy the project folder here first."
+  cat <<'EOF'
+Missing ./dist — prebuilt app not found.
+
+  git clone + bash scripts/install-pistomp-mobile.sh   (dist/ is in the repo)
+  git pull && bash scripts/update-pistomp-mobile.sh  (on the Pi)
+
+Developers: npm run build on your computer, or build on the Pi with Node 18+.
+EOF
   exit 1
 fi
 

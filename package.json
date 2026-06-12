@@ -7,6 +7,7 @@
     "dev": "MOD_API_TARGET=http://127.0.0.1:18181 vite",
     "dev:pistomp": "MOD_API_TARGET=http://127.0.0.1:80 vite",
     "build": "tsc -b && vite build",
+    "build:release": "npm run build",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -6,6 +6,7 @@ Work in progress on `main` (target **1.2.0**). Stable **1.1.0** is frozen on tag
 
 - **Connect:** No `reset`/`load_bundle` on app open — mirror live MOD; use **Change pedalboard** or Advanced **Reload** to force load
 - **ALSA:** `pistomp-audio-api` uses pi-stomp `audiocard` + `alsactl store` to `/var/lib/alsa/asound.state`; sliders only in Settings → Admin
+- **Git install:** Prebuilt `dist/` in repo; `scripts/install-pistomp-mobile.sh` and `scripts/update-pistomp-mobile.sh` on the Pi (vanilla + overlayroot)
 
 ## 1.1.0 (2026-06-03)
 

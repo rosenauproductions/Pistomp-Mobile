@@ -13,6 +13,51 @@ Same Mac build (`npm run build`) for both. Details: [docs/PI-STOMP-VARIANTS.md](
 
 **v1.0.0+** is verified on **headless acoustic**; **vanilla** uses the same app with the simpler install path above. Headless milestone checklist: [docs/MILESTONE-HEADLESS-ACOUSTIC.md](./docs/MILESTONE-HEADLESS-ACOUSTIC.md).
 
+## Easiest install — git on the Pi (recommended)
+
+The repo includes a **prebuilt `dist/`** — no Mac, no Node.js on the Pi. Connect the Pi to **home Wi‑Fi** once for `git clone` (or use Ethernet).
+
+### First install
+
+```bash
+cd ~
+git clone https://github.com/rosenauproductions/Pistomp-Mobile.git
+cd Pistomp-Mobile
+bash scripts/install-pistomp-mobile.sh --reboot
+```
+
+| Image | What the script does |
+|-------|----------------------|
+| **Vanilla** (writable SD) | `sudo bash install-on-pistomp.sh` |
+| **Headless** (overlayroot) | Stage on `/boot/firmware` → chroot install → **reboot** |
+
+After reboot, open **http://pistomp.local:8080** on the Pi hotspot. Leave **Host** empty in app settings.
+
+### Updates
+
+On home Wi‑Fi (or any network with GitHub access):
+
+```bash
+cd ~/Pistomp-Mobile
+bash scripts/update-pistomp-mobile.sh --reboot
+```
+
+Pin a release tag instead of tracking `main`:
+
+```bash
+bash scripts/update-pistomp-mobile.sh --tag v1.1.0 --reboot
+```
+
+`--reboot` is optional on vanilla; on headless it is required so nginx and systemd pick up the install.
+
+### Requirements
+
+- `git` on the Pi (`sudo apt-get install -y git` if missing)
+- `sudo` (password often same as login, e.g. `pistomp` / `pistomp`)
+- Internet **only** for clone/pull — phone control still works on hotspot with no WAN
+
+---
+
 ## What you are installing
 
 | Piece | Purpose |
@@ -36,9 +81,9 @@ On a typical Pi-Stomp home directory you have **both**:
 | Path | What it is |
 |------|------------|
 | `~/pi-stomp/` | Pi-Stomp **firmware** (MOD handler, LCD, ALSA, `run_mobile.sh`, etc.) |
-| `~/Pistomp-Mobile/` | **Mobile web UI** repo (`dist/`, `install-on-pistomp.sh`, `update-dist-on-pistomp.sh`) |
+| `~/Pistomp-Mobile/` | **Mobile web UI** git clone (`dist/`, `install-on-pistomp.sh`, `scripts/install-pistomp-mobile.sh`) |
 
-They are separate projects. **Install and update the phone UI only from `~/Pistomp-Mobile`** (must contain `dist/` after `npm run build` on your Mac).
+They are separate projects. **Install and update the phone UI only from `~/Pistomp-Mobile`**. The git repo ships **prebuilt `dist/`**; Mac `npm run build` is only needed for development.
 
 Do not run `install-on-pistomp.sh` from `~/pi-stomp` unless you also copied `dist/` and the install scripts there.
 
@@ -78,7 +123,11 @@ If you only have the Pi and no PC, use [Build on the Pi](#build-on-the-pi-instea
 
 ---
 
-## Step 1 — Get the project on your computer
+## Step 1 — Get the project
+
+**On the Pi (easiest):** see [Easiest install — git on the Pi](#easiest-install--git-on-the-pi-recommended) above.
+
+**On your computer (for development or SCP deploy):**
 
 ```bash
 git clone https://github.com/rosenauproductions/Pistomp-Mobile.git
@@ -89,7 +138,7 @@ Or download a ZIP from GitHub and extract it.
 
 ---
 
-## Step 2 — Build the production app
+## Step 2 — Build the production app (developers only)
 
 On your computer, in the project folder:
 
@@ -149,7 +198,14 @@ sudo bash install-on-pistomp.sh
 
 Join the Pi-Stomp hotspot → **http://pistomp.local:8080**
 
-Future updates on the Pi:
+Future updates on the Pi (with prebuilt `dist/` in git):
+
+```bash
+cd ~/Pistomp-Mobile
+bash scripts/update-pistomp-mobile.sh --reboot
+```
+
+Or build from source on the Pi (needs Node + npm):
 
 ```bash
 cd ~/Pistomp-Mobile
@@ -361,7 +417,8 @@ Works offline for the UI shell after the first load; control still requires the 
 
 Use the **[verified overlayroot workflow](#read-only-root-overlayroot--locked-sd--verified-workflow)** above (Mac `scp` → `~/Pistomp-Mobile` → stage on `/boot/firmware/pistomp-deploy/` → chroot copy from `/proc/1/root/boot/firmware/…` → `install-on-pistomp.sh` → reboot).
 
-**`~/Pistomp-Mobile` on the Pi is not a git repo** — do not run `git pull` there. Git happens on the Mac only.
+**Git on the Pi:** use `bash scripts/update-pistomp-mobile.sh` from `~/Pistomp-Mobile`.  
+**Mac SCP workflow:** copy `dist/` + scripts without git on the Pi — see [overlayroot workflow](#read-only-root-overlayroot--locked-sd--verified-workflow).
 
 **Check from your Mac** after the Pi is back (must print `true`, not HTML):
 
@@ -484,6 +541,14 @@ npm run dev
 Open http://localhost:5173. Vite proxies API paths to `http://127.0.0.1:80` if MOD-UI is running locally.
 
 Without MOD-UI, the app runs in **DEMO** mode with sample data.
+
+**Releasing UI changes:** `npm run build` then commit `dist/` so Pi users can `git pull` without Node:
+
+```bash
+npm run build
+git add dist
+git commit -m "Rebuild dist for release"
+```
 
 ---
 

@@ -25,51 +25,38 @@ Release notes: **[CHANGELOG.md](./CHANGELOG.md)**
 
 ## Install on Pi-Stomp (summary)
 
-Full step-by-step guide: **[DEPLOYMENT.md](./DEPLOYMENT.md)**
+Full guide: **[DEPLOYMENT.md](./DEPLOYMENT.md)**
 
-### Quick version
+### Easiest — git on the Pi (no Mac, no Node)
 
-**1. On your Mac/PC** — build the app:
+Connect the Pi to home Wi‑Fi once, then:
+
+```bash
+git clone https://github.com/rosenauproductions/Pistomp-Mobile.git ~/Pistomp-Mobile
+cd ~/Pistomp-Mobile
+bash scripts/install-pistomp-mobile.sh --reboot
+```
+
+Updates:
+
+```bash
+cd ~/Pistomp-Mobile
+bash scripts/update-pistomp-mobile.sh --reboot
+```
+
+The repo includes **prebuilt `dist/`**. `~/pi-stomp/` (firmware) and `~/Pistomp-Mobile/` (this UI) are sibling folders.
+
+Default SSH: **`pistomp`** / **`pistomp`**. Phone: **http://pistomp.local:8080** — leave **Host** empty in settings.
+
+### Alternative — build on Mac and SCP
 
 ```bash
 git clone https://github.com/rosenauproductions/Pistomp-Mobile.git
-cd Pistomp-Mobile
-npm install
-npm run build
+cd Pistomp-Mobile && npm install && npm run build
+scp -r dist install-on-pistomp.sh scripts pistomp@pistomp.local:/home/pistomp/Pistomp-Mobile/
 ```
 
-**2. Copy build to the Pi** (see [DEPLOYMENT.md](./DEPLOYMENT.md) for overlayroot staging + chroot):
-
-```bash
-scp -r dist install-on-pistomp.sh scripts \
-  pistomp@pistomp.local:/home/pistomp/Pistomp-Mobile/
-```
-
-If `scp` fails with permission denied after a chroot install:  
-`ssh pistomp@pistomp.local "sudo chown -R pistomp:pistomp /home/pistomp/Pistomp-Mobile"`
-
-On the Pi: `~/pi-stomp/` (firmware) and `~/Pistomp-Mobile/` (this UI) are **sibling folders**. The Pi copy is **not** a git repo.
-
-Default SSH: **`pistomp`** / **`pistomp`**. Phone/UI: **http://pistomp.local:8080**
-
-**3. On the Pi** — headless acoustic uses overlayroot (required for locked SD):
-
-```bash
-bash ~/Pistomp-Mobile/scripts/stage-on-boot-firmware.sh
-sudo overlayroot-chroot
-# copy from /proc/1/root/boot/firmware/pistomp-deploy/… — see DEPLOYMENT.md
-cd /home/pistomp/Pistomp-Mobile && bash install-on-pistomp.sh
-exit
-sudo reboot
-```
-
-**4. On your phone** — join the Pi-Stomp hotspot, then open:
-
-**http://pistomp.local:8080**
-
-Leave the connection **Host** field empty in app settings (gear icon) so API calls use the nginx proxy.
-
-**Build on the Pi?** Yes — install Node 18+ on the Pi, `git clone`, `npm install`, `npm run build`, then run the install script. Easiest path is still build on a computer and copy `dist/` (hotspot has no internet for npm). Details in [DEPLOYMENT.md](./DEPLOYMENT.md).
+Headless overlayroot staging + chroot: [DEPLOYMENT.md](./DEPLOYMENT.md).
 
 See [DEPLOYMENT.md](./DEPLOYMENT.md) for SCP/SFTP options, build-on-Pi steps, troubleshooting, updates, and uninstall.
 

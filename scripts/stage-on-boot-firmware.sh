@@ -11,7 +11,7 @@ SRC="${1:-${HOME}/Pistomp-Mobile}"
 DEST="/boot/firmware/pistomp-deploy"
 
 if [[ ! -d "${SRC}/dist" ]]; then
-  echo "Missing ${SRC}/dist — run npm run build on Mac and scp to ${SRC} first."
+  echo "Missing ${SRC}/dist — git clone this repo (prebuilt dist/) or run npm run build."
   exit 1
 fi
 if [[ ! -f "${SRC}/install-on-pistomp.sh" ]]; then
