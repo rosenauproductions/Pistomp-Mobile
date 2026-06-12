@@ -4,7 +4,7 @@ Lightweight, mobile-first web UI for [Pi-Stomp](https://github.com/TreeFallSound
 
 **Repository:** https://github.com/rosenauproductions/Pistomp-Mobile
 
-**v1.0.0** — Field-verified on **headless acoustic** Pi-Stomp (overlayroot). See [docs/MILESTONE-HEADLESS-ACOUSTIC.md](./docs/MILESTONE-HEADLESS-ACOUSTIC.md).
+**v1.2.0** — Connect without reset, ALSA via pi-stomp, git install on the Pi. Verified on **vanilla** and **headless acoustic**. See [CHANGELOG.md](./CHANGELOG.md).
 
 Release notes: **[CHANGELOG.md](./CHANGELOG.md)**
 
