@@ -8,7 +8,7 @@ interface Props {
 export function HardwareInputControls({ state, onChange }: Props) {
   return (
     <section>
-      <h2 className="section-title">Hardware input</h2>
+      <h2 className="section-title admin-alsa-title">Level</h2>
       <div className="global-row">
         <label>
           <span>{state.label}</span>
@@ -24,7 +24,7 @@ export function HardwareInputControls({ state, onChange }: Props) {
         />
       </div>
       <p className="runtime-mode-hint" style={{ marginTop: "0.35rem" }}>
-        ALSA: <code>{state.control}</code> — change control in Settings
+        ALSA: <code>{state.control}</code>
       </p>
     </section>
   );

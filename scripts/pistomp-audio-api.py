@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Small ALSA control API for Pistomp-Mobile (Pi hardware input/output gain)."""
+"""HTTP ALSA controls for Pistomp-Mobile — uses pi-stomp audiocard when available."""
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -12,8 +13,10 @@ from urllib.parse import parse_qs, urlparse
 HOST = "127.0.0.1"
 PORT = 8766
 CARD = 0
+PI_STOMP_HOME = os.environ.get("PI_STOMP_HOME", "/home/pistomp/pi-stomp")
+# Same path pi-stomp audiocard.py uses (not a Pistomp-Mobile–specific file).
+ASOUND_STATE = "/var/lib/alsa/asound.state"
 
-# IQaudIO Codec names (pi-stomp default); other cards still list via amixer.
 DEFAULT_CONTROLS = [
     ("Aux", "Input gain"),
     ("Headphone", "Output volume"),
@@ -25,12 +28,85 @@ DEFAULT_CONTROLS = [
     ("DAC EQ5", "EQ band 5"),
 ]
 
+_audiocard = None
+_audiocard_tried = False
+
 
 def _run(cmd: str) -> str:
     return subprocess.check_output(cmd, shell=True, text=True, stderr=subprocess.STDOUT)
 
 
+def _get_audiocard():
+    global _audiocard, _audiocard_tried
+    if _audiocard_tried:
+        return _audiocard
+    _audiocard_tried = True
+    if not os.path.isdir(PI_STOMP_HOME):
+        return None
+    try:
+        sys.path.insert(0, PI_STOMP_HOME)
+        from pistomp.audiocardfactory import Audiocardfactory
+
+        _audiocard = Audiocardfactory(PI_STOMP_HOME).create()
+    except Exception as exc:
+        sys.stderr.write(f"pistomp-audio-api: audiocard fallback ({exc})\n")
+        _audiocard = None
+    return _audiocard
+
+
+def _store_alsa_state() -> None:
+    """Persist like pi-stomp System menu (audiocard.store)."""
+    card = _get_audiocard()
+    if card is not None:
+        try:
+            card.store()
+            return
+        except Exception:
+            pass
+    try:
+        subprocess.run(
+            ["/usr/sbin/alsactl", "-f", ASOUND_STATE, "store"],
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except Exception:
+        pass
+
+
+def _resolve_param_name(name: str) -> str:
+    card = _get_audiocard()
+    if card is None:
+        return name
+    if name in (card.CAPTURE_VOLUME, "Aux", "Capture"):
+        return card.CAPTURE_VOLUME or name
+    if name in (card.MASTER, "Headphone", "Master"):
+        return card.MASTER or name
+    for attr in ("DAC_EQ", "EQ_1", "EQ_2", "EQ_3", "EQ_4", "EQ_5"):
+        val = getattr(card, attr, None)
+        if val and name == val:
+            return val
+    return name
+
+
 def list_controls() -> list[dict]:
+    card = _get_audiocard()
+    if card is not None:
+        items: list[dict] = []
+        for label, attr in (
+            ("Input gain", "CAPTURE_VOLUME"),
+            ("Output volume", "MASTER"),
+            ("DAC EQ", "DAC_EQ"),
+            ("EQ band 1", "EQ_1"),
+            ("EQ band 2", "EQ_2"),
+            ("EQ band 3", "EQ_3"),
+            ("EQ band 4", "EQ_4"),
+            ("EQ band 5", "EQ_5"),
+        ):
+            param = getattr(card, attr, None)
+            if param:
+                items.append({"name": param, "label": label})
+        if items:
+            return items
     try:
         out = _run(f"amixer -c {CARD} scontrols")
     except subprocess.CalledProcessError:
@@ -39,8 +115,7 @@ def list_controls() -> list[dict]:
     for line in out.splitlines():
         m = re.search(r"Simple mixer control '([^']+)'", line)
         if m:
-            name = m.group(1)
-            found.append({"name": name, "label": name})
+            found.append({"name": m.group(1), "label": m.group(1)})
     if not found:
         return [{"name": n, "label": lbl} for n, lbl in DEFAULT_CONTROLS]
     preferred = {n: lbl for n, lbl in DEFAULT_CONTROLS}
@@ -55,8 +130,20 @@ def list_controls() -> list[dict]:
 
 
 def get_volume_db(name: str) -> dict | None:
+    param = _resolve_param_name(name)
+    card = _get_audiocard()
+    if card is not None and param:
+        try:
+            value_db = float(card.get_volume_parameter(param))
+            # pi-stomp returns float dB; approximate min/max for IQaudIO Aux
+            min_db, max_db = -20.0, 12.0
+            if param == card.CAPTURE_VOLUME:
+                min_db, max_db = -19.75, 12.0
+            return {"valueDb": round(value_db, 2), "minDb": min_db, "maxDb": max_db}
+        except Exception:
+            pass
     try:
-        s = _run(f"amixer -c {CARD} -- sget '{name}'")
+        s = _run(f"amixer -c {CARD} -- sget '{param}'")
     except subprocess.CalledProcessError:
         return None
     cur = re.search(r"\[(-?\d+\.\d+)dB\]", s)
@@ -69,13 +156,23 @@ def get_volume_db(name: str) -> dict | None:
     return {"valueDb": value_db, "minDb": min(mins), "maxDb": max(mins)}
 
 
-def set_volume_db(name: str, value_db: float) -> bool:
-    cmd = f"amixer -c {CARD} -q -- sset '{name}' '{value_db}db'"
+def set_volume_db(name: str, value_db: float, store: bool = True) -> bool:
+    param = _resolve_param_name(name)
+    card = _get_audiocard()
+    if card is not None and param:
+        try:
+            ok = card.set_volume_parameter(param, value_db, store=store)
+            return bool(ok)
+        except Exception:
+            pass
+    cmd = f"amixer -c {CARD} -q -- sset '{param}' '{value_db}db'"
     try:
         subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT)
-        return True
     except subprocess.CalledProcessError:
         return False
+    if store:
+        _store_alsa_state()
+    return True
 
 
 def db_to_norm(value_db: float, min_db: float, max_db: float) -> float:
@@ -162,7 +259,7 @@ class Handler(BaseHTTPRequestHandler):
         else:
             norm = float(body.get("value", 0))
             target_db = norm_to_db(norm, info["minDb"], info["maxDb"])
-        ok = set_volume_db(name, round(target_db, 2))
+        ok = set_volume_db(name, round(target_db, 2), store=True)
         self._json(200 if ok else 500, {"ok": ok})
 
 

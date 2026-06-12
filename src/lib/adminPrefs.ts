@@ -3,10 +3,10 @@ const HARDWARE_INPUT_VISIBLE_KEY = "pistomp-mobile-show-hardware-input";
 export function getShowHardwareInput(): boolean {
   try {
     const v = localStorage.getItem(HARDWARE_INPUT_VISIBLE_KEY);
-    if (v === "0" || v === "false") return false;
-    return true;
+    if (v === "1" || v === "true") return true;
+    return false;
   } catch {
-    return true;
+    return false;
   }
 }
 

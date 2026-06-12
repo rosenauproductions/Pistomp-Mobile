@@ -131,16 +131,20 @@ export function useStomp() {
         const pbTitle = list.find((p) => p.bundle === initial)?.title ?? "pedalboard";
         setActiveBundle(initial);
         if (isPiStompMode()) {
-          setBusyMessage(`Loading ${pbTitle}…`);
+          setBusyMessage(`Syncing ${pbTitle}…`);
           const wsOk = await modui.ensureWebSocketReady();
           if (!wsOk) {
             setError(
               "WebSocket to MOD failed — stomps need WS (HTTP pi_stomp_set may be unavailable on this image). Re-run install-on-pistomp.sh if /websocket fails.",
             );
           }
-          const loaded = await modui.syncHostPedalboard(initial);
-          if (!loaded) {
-            setError("Could not load pedalboard into MOD — try Change pedalboard again");
+          const alreadyLive = await modui.hostReportsPedalboardLoaded(initial);
+          if (alreadyLive) {
+            modui.pushControlLog(`connect: MOD already on ${initial} (no reset/load)`);
+          } else {
+            modui.pushControlLog(
+              `connect: mirror UI only — use Change pedalboard to load into MOD if stomps are dead`,
+            );
           }
         }
         try {
@@ -152,7 +156,6 @@ export function useStomp() {
         }
       }
       setDirty(false);
-      await refreshHardwareInput();
       await refreshWifiStatus();
     } catch (e) {
       setModReachable(false);
@@ -387,6 +390,26 @@ export function useStomp() {
     await refreshHardwareInput(controlName);
   };
 
+  const reloadActivePedalboard = async () => {
+    if (mode !== "live" || !activeBundle) {
+      setError("Connect in LIVE mode with a pedalboard selected first.");
+      return;
+    }
+    setBusy(true);
+    setBusyMessage("Reloading pedalboard into MOD…");
+    setError(null);
+    try {
+      const ok = await modui.syncHostPedalboard(activeBundle);
+      if (!ok) throw new Error("Could not load pedalboard into MOD");
+      await refreshBoard(activeBundle, true, { replacePlugins: true });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Reload failed");
+    } finally {
+      setBusy(false);
+      setBusyMessage(null);
+    }
+  };
+
   const loadSnapshot = async (id: string) => {
     setActiveSnapshot(id);
     if (mode === "demo") return;
@@ -510,6 +533,8 @@ export function useStomp() {
     hardwareInput,
     wifiAdminAvailable,
     refreshWifiStatus,
+    refreshHardwareInput,
+    reloadActivePedalboard,
     showHardwareInput,
     setShowHardwareInput,
     dirty,

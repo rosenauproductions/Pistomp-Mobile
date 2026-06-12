@@ -2,7 +2,6 @@ import { useState } from "react";
 import { EffectGrid } from "./components/EffectGrid";
 import { EffectSettingsSheet } from "./components/EffectSettingsSheet";
 import { GlobalControls } from "./components/GlobalControls";
-import { HardwareInputControls } from "./components/HardwareInputControls";
 import { Header } from "./components/Header";
 import { PedalboardSheet } from "./components/PedalboardSheet";
 import { SettingsSheet } from "./components/SettingsSheet";
@@ -77,13 +76,6 @@ export default function App() {
           onSelect={(id) => void stomp.loadSnapshot(id)}
         />
 
-        {stomp.showHardwareInput && stomp.hardwareInput && (
-          <HardwareInputControls
-            state={stomp.hardwareInput}
-            onChange={(v) => void stomp.setHardwareInputValue(v)}
-          />
-        )}
-
         <GlobalControls controls={stomp.globals} onChange={(c, v) => void stomp.setGlobalValue(c, v)} />
 
         <div className="strip">
@@ -120,8 +112,11 @@ export default function App() {
         onSave={stomp.saveHost}
         onRuntimeModeChange={stomp.saveRuntimeMode}
         onHardwareControlChange={(name) => void stomp.setHardwareInputControl(name)}
-        showHardwareInput={stomp.showHardwareInput}
-        onShowHardwareInputChange={stomp.setShowHardwareInput}
+        onHardwareInputChange={(v) => void stomp.setHardwareInputValue(v)}
+        onRefreshHardwareInput={async () => {
+          await stomp.refreshHardwareInput();
+        }}
+        onReloadPedalboard={stomp.reloadActivePedalboard}
         onTest={() => void stomp.connect()}
         onCollectQa={stomp.collectQa}
         wifiStatus={stomp.wifiStatus}

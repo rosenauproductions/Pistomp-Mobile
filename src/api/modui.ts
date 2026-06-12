@@ -178,9 +178,23 @@ export async function ensureWebSocketReady(): Promise<boolean> {
   }
 }
 
+function normalizeBundlePath(bundle: string): string {
+  return bundle.trim().replace(/\/$/, "");
+}
+
 /**
- * Pi `/pedalboard/current` is often empty even when the UI bundle exists on disk.
- * Always reset+load so MOD host graph matches the app (avoids pi_stomp_set 500 / dead controls).
+ * True when MOD reports this bundle is already loaded — safe to skip reset/load on connect.
+ */
+export async function hostReportsPedalboardLoaded(bundlepath: string): Promise<boolean> {
+  if (!bundlepath) return false;
+  const current = await getCurrentPedalboardBundle();
+  if (!current) return false;
+  return normalizeBundlePath(current) === normalizeBundlePath(bundlepath);
+}
+
+/**
+ * Reset + load into MOD host. Use when the user picks a pedalboard or explicitly reloads —
+ * not on every app connect (that interrupts live audio).
  */
 export async function syncHostPedalboard(bundlepath: string): Promise<boolean> {
   if (!bundlepath) return false;

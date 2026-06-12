@@ -240,6 +240,7 @@ After=network.target sound.target
 Type=simple
 User=pistomp
 Group=pistomp
+Environment=PI_STOMP_HOME=/home/pistomp/pi-stomp
 ExecStart=/usr/bin/python3 ${INSTALL_DIR}/pistomp-audio-api.py
 Restart=on-failure
 RestartSec=2

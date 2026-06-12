@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { ConnectionMode } from "../api/types";
 import type { HardwareInputState } from "../api/pistompAudio";
 import type { WifiStatus } from "../api/pistompWifi";
+import { HardwareInputControls } from "./HardwareInputControls";
 import { InstallHealthPanel } from "./InstallHealthPanel";
 import { NetworkHints } from "./NetworkHints";
 import { WifiAdminControls } from "./WifiAdminControls";
@@ -25,8 +26,9 @@ interface Props {
   onSave: (host: string) => void;
   onRuntimeModeChange: (mode: RuntimeMode) => void;
   onHardwareControlChange: (controlName: string) => void;
-  showHardwareInput: boolean;
-  onShowHardwareInputChange: (visible: boolean) => void;
+  onHardwareInputChange: (value: number) => void;
+  onRefreshHardwareInput: () => Promise<void>;
+  onReloadPedalboard: () => Promise<void>;
   onTest: () => void;
   onCollectQa: () => Promise<string>;
   wifiStatus: WifiStatus | null;
@@ -44,8 +46,9 @@ export function SettingsSheet({
   onSave,
   onRuntimeModeChange,
   onHardwareControlChange,
-  showHardwareInput,
-  onShowHardwareInputChange,
+  onHardwareInputChange,
+  onRefreshHardwareInput,
+  onReloadPedalboard,
   onTest,
   onCollectQa,
   wifiStatus,
@@ -79,8 +82,9 @@ export function SettingsSheet({
       setValue(host);
       setRuntime(runtimeMode);
       setAlsaControl(hardwareInput?.control ?? "");
+      if (mode === "live") void onRefreshHardwareInput();
     }
-  }, [open, host, runtimeMode, hardwareInput?.control]);
+  }, [open, host, runtimeMode, hardwareInput?.control, mode, onRefreshHardwareInput]);
 
   useEffect(() => {
     if (open && qaOpen) void refreshQa();
@@ -114,25 +118,11 @@ export function SettingsSheet({
             </div>
 
             <div className="admin-subsection">
-              <span className="admin-subsection-label">Input controls</span>
-              <div className="admin-switch-row">
-                <span>Show Volume Slider?</span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={showHardwareInput}
-                  className={`admin-switch ${showHardwareInput ? "on" : ""}`}
-                  onClick={() => onShowHardwareInputChange(!showHardwareInput)}
-                />
-              </div>
-            </div>
-
-            <div className="admin-subsection">
               <span className="admin-subsection-label">Hardware audio (ALSA)</span>
               {hardwareInput ? (
                 <>
                   <label>
-                    <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>Input gain control</span>
+                    <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>Control</span>
                     <select
                       value={alsaControl}
                       onChange={(e) => {
@@ -147,16 +137,21 @@ export function SettingsSheet({
                       ))}
                     </select>
                   </label>
+                  <HardwareInputControls
+                    state={hardwareInput}
+                    onChange={onHardwareInputChange}
+                  />
                   <p className="runtime-mode-hint">
-                    Same ALSA control as the Pi-Stomp system menu (e.g. Aux). Requires{" "}
-                    <code>install-on-pistomp.sh</code>.
+                    Same path as the Pi-Stomp system menu — saved to{" "}
+                    <code>/var/lib/alsa/asound.state</code> via pi-stomp{" "}
+                    <code>audiocard</code>.
                   </p>
                 </>
               ) : (
                 <p className="runtime-mode-hint">
                   {mode === "live"
                     ? "Hardware ALSA API not reachable — re-run install-on-pistomp.sh on the Pi."
-                    : "Connect to the Pi to configure hardware input volume."}
+                    : "Connect to the Pi to adjust hardware volume."}
                 </p>
               )}
             </div>
@@ -256,6 +251,15 @@ export function SettingsSheet({
                 </label>
               )}
               <InstallHealthPanel />
+              {mode === "live" && (
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  onClick={() => void onReloadPedalboard()}
+                >
+                  Reload current pedalboard into MOD (reset)
+                </button>
+              )}
               <button
                 type="button"
                 className="btn-ghost qa-toggle-btn"

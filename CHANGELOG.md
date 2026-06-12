@@ -4,6 +4,9 @@
 
 Work in progress on `main` (target **1.2.0**). Stable **1.1.0** is frozen on tag `v1.1.0` and branch `release/1.1.x` — hotfixes only there.
 
+- **Connect:** No `reset`/`load_bundle` on app open — mirror live MOD; use **Change pedalboard** or Advanced **Reload** to force load
+- **ALSA:** `pistomp-audio-api` uses pi-stomp `audiocard` + `alsactl store` to `/var/lib/alsa/asound.state`; sliders only in Settings → Admin
+
 ## 1.1.0 (2026-06-03)
 
 - **Pi device:** Offline mode instead of demo when MOD unreachable; connection status bar and load banner
