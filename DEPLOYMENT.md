@@ -26,6 +26,8 @@ cd Pistomp-Mobile
 bash scripts/install-pistomp-mobile.sh --reboot
 ```
 
+If `~/Pistomp-Mobile` already exists, use the [update script](#updates) instead of `git clone`.
+
 | Image | What the script does |
 |-------|----------------------|
 | **Vanilla** (writable SD) | `sudo bash install-on-pistomp.sh` |
@@ -376,6 +378,8 @@ The script will:
 | `Read-only file system` | Use [overlayroot-chroot](#read-only-root-overlayroot--locked-sd) above |
 | `Run as root` | Inside chroot, `bash install-on-pistomp.sh` (root). Outside, `sudo bash install-on-pistomp.sh` |
 | `nginx -t` fails | Another site may conflict on port 8080; edit `/etc/nginx/sites-available/pistomp-mobile` |
+| `nginx.service is not active, cannot reload` | Fresh `apt install nginx` enables a default site on **:80** (MOD-UI already uses it). Install script 1.2.1+ removes it and **starts** nginx; on older scripts: `sudo rm -f /etc/nginx/sites-enabled/default && sudo systemctl start nginx` |
+| `fatal: destination path ... already exists` | Skip `git clone`; use `cd ~/Pistomp-Mobile && bash scripts/update-pistomp-mobile.sh --reboot` |
 | MOD-UI not responding | See [Troubleshooting](#troubleshooting) |
 
 ---
@@ -541,6 +545,22 @@ sudo nginx -t && sudo systemctl reload nginx
 ```
 
 Open `http://172.24.1.1:8081` on your phone.
+
+### Fresh install: nginx installed but `:8080` does not respond
+
+On a **writable-root** Pi-Stomp with no nginx preinstalled, `apt install nginx` adds `/etc/nginx/sites-enabled/default` listening on port **80**. MOD-UI already binds **80**, so nginx never starts and `systemctl reload nginx` fails.
+
+**Fix (included in `install-on-pistomp.sh` 1.2.1+):**
+
+```bash
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t
+sudo systemctl enable nginx
+sudo systemctl start nginx
+curl -s http://127.0.0.1:8080/pistomp/wifi/status
+```
+
+Pistomp-Mobile only needs nginx on **8080**; it proxies MOD-UI on 127.0.0.1:80.
 
 ---
 

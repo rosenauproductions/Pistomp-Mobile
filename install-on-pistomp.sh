@@ -418,6 +418,8 @@ if [[ -d /etc/nginx/sites-available ]]; then
   write_pistomp_nginx_server "${NGINX_SITE}"
   mkdir -p /etc/nginx/sites-enabled
   ln -sf "${NGINX_SITE}" "${NGINX_ENABLED}"
+  # Fresh apt nginx ships a default site on :80 — MOD-UI already owns :80 on Pi-Stomp.
+  rm -f /etc/nginx/sites-enabled/default
   echo "nginx: installed site ${NGINX_SITE} (Debian layout)"
 elif [[ -f "${NGINX_SNIPPET}" ]] \
   || grep -q 'pistomp-mobile-8080.conf' /etc/nginx/nginx.conf 2>/dev/null \
@@ -455,7 +457,16 @@ fi
 
 nginx -t
 if [[ "${IN_CHROOT}" -eq 0 ]]; then
-  systemctl reload nginx
+  systemctl enable nginx 2>/dev/null || true
+  systemctl start nginx 2>/dev/null || systemctl restart nginx
+  systemctl reload nginx 2>/dev/null || true
+  if curl -sf "http://127.0.0.1:${PORT}/" >/dev/null 2>&1; then
+    echo "Verify OK: http://127.0.0.1:${PORT}/"
+  else
+    echo "WARN: nginx -t passed but :${PORT} is not responding."
+    echo "  If this is a fresh apt nginx install, MOD-UI may own :80 — default site should be disabled (re-run this script)."
+    echo "  Manual fix: sudo rm -f /etc/nginx/sites-enabled/default && sudo systemctl start nginx"
+  fi
 fi
 
 echo ""

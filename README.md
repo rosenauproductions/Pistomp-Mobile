@@ -37,6 +37,8 @@ cd ~/Pistomp-Mobile
 bash scripts/install-pistomp-mobile.sh --reboot
 ```
 
+If `~/Pistomp-Mobile` already exists, skip `git clone` and run the update script instead.
+
 Updates:
 
 ```bash
