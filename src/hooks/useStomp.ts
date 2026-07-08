@@ -93,6 +93,7 @@ export function useStomp() {
       setBoard((prev) => {
         const plugins = modui.applyPluginsAfterRefresh(prev.plugins, info.plugins, {
           replace: opts?.replacePlugins,
+          connections: info.connections,
         });
         setGlobals(modui.extractGlobalControls(plugins));
         return { ...info, plugins };

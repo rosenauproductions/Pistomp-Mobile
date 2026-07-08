@@ -3,6 +3,7 @@ import {
   isPiStompMode,
   RUNTIME_MODE_HEADER,
 } from "../lib/runtimeMode";
+import { orderPluginsBySignalFlow } from "../lib/orderPluginsBySignalFlow";
 import {
   enrichPluginPortRanges,
   findNativeBypassPort,
@@ -13,6 +14,7 @@ import type {
   ConnectionMode,
   EffectPlugin,
   GlobalControl,
+  PedalboardConnection,
   PedalboardInfo,
   PedalboardSummary,
   SnapshotsMap,
@@ -326,35 +328,15 @@ export function mergePluginsPreservingLiveState(
   });
 }
 
-/** `/pedalboard/info/` plugin order is not stable — keep grid order from the UI between polls. */
-export function stabilizePluginOrder(
-  prev: EffectPlugin[],
-  next: EffectPlugin[],
-): EffectPlugin[] {
-  if (prev.length === 0) return next;
-  const remaining = new Map(next.map((p) => [p.instance, p]));
-  const ordered: EffectPlugin[] = [];
-  for (const p of prev) {
-    const fresh = remaining.get(p.instance);
-    if (fresh) {
-      ordered.push(fresh);
-      remaining.delete(p.instance);
-    }
-  }
-  for (const p of remaining.values()) {
-    ordered.push(p);
-  }
-  return ordered;
-}
-
-/** Merge live MOD Desktop state and keep a stable stomp grid order after HTTP refresh. */
+/** Merge live MOD Desktop state; grid order comes from MOD connections + layout. */
 export function applyPluginsAfterRefresh(
   prev: EffectPlugin[],
   fromInfo: EffectPlugin[],
-  opts?: { replace?: boolean },
+  opts?: { replace?: boolean; connections?: PedalboardConnection[] },
 ): EffectPlugin[] {
   const base = opts?.replace ? [] : prev;
-  return stabilizePluginOrder(base, mergePluginsPreservingLiveState(base, fromInfo));
+  const ordered = orderPluginsBySignalFlow(fromInfo, opts?.connections ?? []);
+  return mergePluginsPreservingLiveState(base, ordered);
 }
 
 async function request<T>(
@@ -786,10 +768,12 @@ async function fetchEffectGetMeta(uri: string): Promise<unknown> {
 export async function getPedalboardInfo(bundlepath: string): Promise<PedalboardInfo> {
   const q = new URLSearchParams({ bundlepath });
   const info = await request<PedalboardInfo>(`/pedalboard/info/?${q}`);
-  info.plugins = info.plugins.map((p) => normalizePluginPorts(p));
-  info.plugins = await enrichPluginsWithColors(info.plugins);
-  info.plugins = await enrichPluginPortRanges(info.plugins, fetchEffectGetMeta);
-  return info;
+  const connections = info.connections ?? [];
+  let plugins = info.plugins.map((p) => normalizePluginPorts(p));
+  plugins = await enrichPluginsWithColors(plugins);
+  plugins = await enrichPluginPortRanges(plugins, fetchEffectGetMeta);
+  plugins = orderPluginsBySignalFlow(plugins, connections);
+  return { ...info, plugins, connections };
 }
 
 /** Pi load_bundle can lag; retry before showing an empty grid. */

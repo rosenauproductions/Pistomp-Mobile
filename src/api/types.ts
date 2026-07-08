@@ -23,11 +23,21 @@ export interface EffectPlugin {
   bypassed: boolean;
   valid?: boolean;
   ports: EffectPort[];
+  /** MOD constructor position — used for signal-order tie-breaks. */
+  x?: number;
+  y?: number;
+}
+
+export interface PedalboardConnection {
+  source: string;
+  target: string;
+  valid?: boolean;
 }
 
 export interface PedalboardInfo {
   title: string;
   plugins: EffectPlugin[];
+  connections?: PedalboardConnection[];
 }
 
 export type SnapshotsMap = Record<string, string>;
