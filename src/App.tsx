@@ -5,7 +5,7 @@ import { GlobalControls } from "./components/GlobalControls";
 import { Header } from "./components/Header";
 import { PedalboardSheet } from "./components/PedalboardSheet";
 import { SettingsSheet } from "./components/SettingsSheet";
-import { SnapshotBar } from "./components/SnapshotBar";
+import { SnapshotBar, snapshotCount } from "./components/SnapshotBar";
 import { ConnectionStatusBar } from "./components/ConnectionStatusBar";
 import { useStomp } from "./hooks/useStomp";
 import type { EffectPlugin } from "./api/types";
@@ -69,7 +69,10 @@ export default function App() {
           Change pedalboard
         </button>
 
-        <h2 className="section-title">Snapshots</h2>
+        <h2 className="section-title">
+          Snapshots
+          {snapshotCount(stomp.snapshots) > 0 ? ` (${snapshotCount(stomp.snapshots)})` : ""}
+        </h2>
         <SnapshotBar
           snapshots={stomp.snapshots}
           activeId={stomp.activeSnapshot}

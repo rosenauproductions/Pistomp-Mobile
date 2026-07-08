@@ -53,7 +53,13 @@ export const DEMO_BOARD: PedalboardInfo = {
   ],
 };
 
-export const DEMO_SNAPSHOTS: SnapshotsMap = { "0": "A", "1": "B" };
+export const DEMO_SNAPSHOTS: SnapshotsMap = {
+  "0": "Clean",
+  "1": "Crunch",
+  "2": "Lead",
+  "3": "Ambient",
+  "4": "Solo",
+};
 
 export const DEMO_GLOBALS: GlobalControl[] = [
   {

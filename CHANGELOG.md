@@ -7,6 +7,10 @@
 - **Fix:** Fresh `apt install nginx` on vanilla Pi-Stomp — disable Debian default `:80` site (MOD-UI owns port 80), `enable`/`start` nginx instead of reload-only, post-install `:8080` verify
 - **Docs:** DEPLOYMENT troubleshooting for nginx not active; use update script when `~/Pistomp-Mobile` already exists
 
+### UI
+
+- **Snapshots:** Show all pedalboard snapshots in a horizontal scroll strip (was capped at A/B only)
+
 Work in progress on `main` (target **1.2.1**). Stable **1.2.0** is tag `v1.2.0`; **1.1.0** remains on `v1.1.0` / `release/1.1.x` for hotfixes only.
 
 ## 1.2.0 (2026-06-12)
