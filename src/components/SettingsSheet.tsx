@@ -134,8 +134,8 @@ export function SettingsSheet({
             ))}
           </div>
           <p className="runtime-mode-hint">
-            Rotates the whole UI for holding the phone sideways. Locks device rotation to match
-            (best in Add to Home Screen / fullscreen). No reconnect needed.
+            Rotates pedals and snapshots in place (chrome stays put). Locks portrait orientation
+            when possible (best in Add to Home Screen). No reconnect needed.
           </p>
         </div>
 

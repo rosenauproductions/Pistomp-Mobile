@@ -32,10 +32,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    const rotated = displayRotation !== "portrait";
-    document.body.classList.toggle("display-rotated", rotated);
     void lockDisplayOrientation(displayRotation);
-    return () => document.body.classList.remove("display-rotated");
   }, [displayRotation]);
 
   const openEffectSettings = (plugin: EffectPlugin) => {
@@ -45,11 +42,10 @@ export default function App() {
   const effectPlugin =
     effectSettingsInstance != null ? stomp.getPlugin(effectSettingsInstance) ?? null : null;
 
+  const pedalRotation = displayRotation === "portrait" ? undefined : displayRotation;
+
   return (
-    <div
-      className="rotate-shell"
-      data-rotation={displayRotation === "portrait" ? undefined : displayRotation}
-    >
+    <div className="app-shell" data-pedal-rotation={pedalRotation}>
       <div className={`app ${stomp.busy ? "busy-overlay" : ""}`} aria-busy={stomp.busy}>
         <Header
           title={stomp.board.title}

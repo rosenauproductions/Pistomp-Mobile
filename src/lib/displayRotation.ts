@@ -21,10 +21,9 @@ export function setDisplayRotation(rotation: DisplayRotation): void {
 }
 
 /**
- * Lock the device orientation so it matches our Display setting.
- * CSS ±90° expects the phone to stay physically portrait — lock portrait for all modes
- * so the browser does not fight the visual rotate.
- * Best chance of success: call from a tap (Settings buttons). May no-op on plain HTTP / non-PWA.
+ * Lock device orientation so the browser does not fight in-place pedal/snapshot rotate.
+ * Chrome stays portrait; only pedals/snapshots CSS-rotate — keep the phone portrait-locked.
+ * Best chance of success: call from a tap (Settings). May no-op on plain HTTP / non-PWA.
  */
 export async function lockDisplayOrientation(_rotation: DisplayRotation): Promise<void> {
   const orient = screen.orientation as ScreenOrientation & {
@@ -32,7 +31,6 @@ export async function lockDisplayOrientation(_rotation: DisplayRotation): Promis
   };
   if (typeof orient?.lock !== "function") return;
 
-  // Prefer portrait so CSS rotate (±90) is not double-applied by the browser.
   for (const type of ["portrait", "portrait-primary"] as const) {
     try {
       await orient.lock(type);

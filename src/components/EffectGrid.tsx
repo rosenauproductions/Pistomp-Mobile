@@ -21,38 +21,36 @@ export function EffectGrid({ plugins, onToggle, onOpenSettings }: Props) {
         const displayName = plugin.title ?? plugin.instance;
 
         return (
-          <article
-            key={plugin.instance}
-            className={`effect ${hasColor ? "has-color" : ""}`}
-            style={style}
-          >
-            <div className="effect-head">
-              <span className="effect-name" title={displayName}>
-                {displayName}
-              </span>
-              <button
-                type="button"
-                className="effect-settings-btn"
-                aria-label={`${plugin.title ?? plugin.instance} settings`}
-                onClick={() => onOpenSettings(plugin)}
-              >
-                ⚙
-              </button>
-            </div>
+          <div key={plugin.instance} className="effect-slot">
+            <article className={`effect ${hasColor ? "has-color" : ""}`} style={style}>
+              <div className="effect-head">
+                <span className="effect-name" title={displayName}>
+                  {displayName}
+                </span>
+                <button
+                  type="button"
+                  className="effect-settings-btn"
+                  aria-label={`${plugin.title ?? plugin.instance} settings`}
+                  onClick={() => onOpenSettings(plugin)}
+                >
+                  ⚙
+                </button>
+              </div>
 
-            <div className="stomp-pedal">
-              <span
-                className={`stomp-led ${active ? "on" : ""}`}
-                aria-label={active ? "Effect on" : "Effect off"}
-                role="status"
-              />
-              <StompSwitch
-                active={active}
-                label={`Toggle ${plugin.title ?? plugin.instance}`}
-                onPress={() => onToggle(plugin)}
-              />
-            </div>
-          </article>
+              <div className="stomp-pedal">
+                <span
+                  className={`stomp-led ${active ? "on" : ""}`}
+                  aria-label={active ? "Effect on" : "Effect off"}
+                  role="status"
+                />
+                <StompSwitch
+                  active={active}
+                  label={`Toggle ${plugin.title ?? plugin.instance}`}
+                  onPress={() => onToggle(plugin)}
+                />
+              </div>
+            </article>
+          </div>
         );
       })}
     </div>

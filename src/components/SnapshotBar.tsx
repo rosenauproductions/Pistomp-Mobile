@@ -19,17 +19,18 @@ export function SnapshotBar({ snapshots, activeId, onSelect }: Props) {
       {entries.map(([id, name]) => {
         const label = snapshotLabel(id, name);
         return (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={activeId === id}
-            className={`snap-btn ${activeId === id ? "active" : ""}`}
-            title={label}
-            onClick={() => onSelect(id)}
-          >
-            {label}
-          </button>
+          <div key={id} className="snap-slot">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeId === id}
+              className={`snap-btn ${activeId === id ? "active" : ""}`}
+              title={label}
+              onClick={() => onSelect(id)}
+            >
+              {label}
+            </button>
+          </div>
         );
       })}
     </div>
