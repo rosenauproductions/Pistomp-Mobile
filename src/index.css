@@ -54,8 +54,48 @@ input {
   margin: 0 auto;
 }
 
-.app-shell {
+/* Full-UI landscape: CSS-rotate shell; pedals/snapshots re-laid so names stay on top */
+.rotate-shell {
   min-height: 100dvh;
+}
+
+.rotate-shell[data-rotation="90"],
+.rotate-shell[data-rotation="-90"] {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100dvh;
+  height: 100dvw;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--bg);
+  z-index: 1;
+}
+
+.rotate-shell[data-rotation="90"] {
+  transform: rotate(90deg) translateY(-100%);
+  transform-origin: top left;
+}
+
+.rotate-shell[data-rotation="-90"] {
+  transform: rotate(-90deg) translateX(-100%);
+  transform-origin: top left;
+}
+
+.rotate-shell[data-rotation="90"] .app,
+.rotate-shell[data-rotation="-90"] .app {
+  min-height: 100%;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.rotate-shell[data-rotation="90"] .sheet,
+.rotate-shell[data-rotation="-90"] .sheet {
+  max-height: 70%;
+}
+
+body.display-rotated {
+  overflow: hidden;
 }
 
 .display-rotation-toggle {
@@ -64,34 +104,50 @@ input {
   gap: 0.5rem;
 }
 
-/* In-place pedal + snapshot rotate — chrome stays put */
-.app-shell[data-pedal-rotation="90"] .effect-slot,
-.app-shell[data-pedal-rotation="-90"] .effect-slot {
-  display: flex;
+/*
+ * After shell ±90, layout "above" becomes a screen side.
+ * Use a row so name lands on the visual top and the footswitch on the visual bottom.
+ *  90°: name left → visual top
+ * -90°: name right (row-reverse) → visual top
+ */
+.rotate-shell[data-rotation="90"] .grid,
+.rotate-shell[data-rotation="-90"] .grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.rotate-shell[data-rotation="90"] .effect-slot,
+.rotate-shell[data-rotation="-90"] .effect-slot {
+  min-width: 0;
+}
+
+.rotate-shell[data-rotation="90"] .effect {
+  flex-direction: row;
   align-items: center;
-  justify-content: center;
-  min-height: 11.5rem;
-  overflow: visible;
+  gap: 0.5rem;
+  min-height: 5.5rem;
+  padding: 0.5rem 0.55rem;
 }
 
-.app-shell[data-pedal-rotation="90"] .effect,
-.app-shell[data-pedal-rotation="-90"] .effect {
-  width: 8.75rem;
-  min-height: 10.5rem;
-  flex-shrink: 0;
-  transform-origin: center center;
+.rotate-shell[data-rotation="-90"] .effect {
+  flex-direction: row-reverse;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 5.5rem;
+  padding: 0.5rem 0.55rem;
 }
 
-.app-shell[data-pedal-rotation="90"] .effect {
-  transform: rotate(90deg);
+.rotate-shell[data-rotation="90"] .effect-head,
+.rotate-shell[data-rotation="-90"] .effect-head {
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
 }
 
-.app-shell[data-pedal-rotation="-90"] .effect {
-  transform: rotate(-90deg);
-}
-
-.app-shell[data-pedal-rotation="90"] .effect-name,
-.app-shell[data-pedal-rotation="-90"] .effect-name {
+.rotate-shell[data-rotation="90"] .effect-name,
+.rotate-shell[data-rotation="-90"] .effect-name {
   white-space: normal;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -99,51 +155,56 @@ input {
   overflow: hidden;
   -webkit-mask-image: none;
   mask-image: none;
-}
-
-.app-shell[data-pedal-rotation="90"] .snapshot-bar,
-.app-shell[data-pedal-rotation="-90"] .snapshot-bar {
-  flex-direction: column;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 0.75rem;
-  overflow-x: visible;
-  overflow-y: auto;
-  max-height: 16rem;
-  scroll-snap-type: y mandatory;
-  padding: 0.5rem 0;
-}
-
-.app-shell[data-pedal-rotation="90"] .snap-slot,
-.app-shell[data-pedal-rotation="-90"] .snap-slot {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 5.5rem;
   width: 100%;
-  scroll-snap-align: start;
 }
 
-.app-shell[data-pedal-rotation="90"] .snap-btn,
-.app-shell[data-pedal-rotation="-90"] .snap-btn {
-  flex: none;
-  width: 4.75rem;
-  min-width: 4.75rem;
-  max-width: 4.75rem;
-  min-height: 4.25rem;
-  padding: 0.5rem 0.35rem;
+.rotate-shell[data-rotation="90"] .stomp-pedal,
+.rotate-shell[data-rotation="-90"] .stomp-pedal {
+  margin-top: 0;
+  flex-shrink: 0;
+  flex-direction: column;
+}
+
+.rotate-shell[data-rotation="90"] .stomp-switch,
+.rotate-shell[data-rotation="-90"] .stomp-switch {
+  max-width: 3.75rem;
+  margin: 0;
+}
+
+/*
+ * Shell ±90 turns a layout row into a visual vertical stack.
+ * Keep snapshot chips in a row; size them for stomping.
+ */
+.rotate-shell[data-rotation="90"] .snapshot-bar,
+.rotate-shell[data-rotation="-90"] .snapshot-bar {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 0.65rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-height: none;
+  scroll-snap-type: x mandatory;
+  padding: 0.35rem 0.15rem;
+}
+
+.rotate-shell[data-rotation="90"] .snap-slot,
+.rotate-shell[data-rotation="-90"] .snap-slot {
+  flex: 0 0 auto;
+  min-height: 0;
+  width: auto;
+}
+
+.rotate-shell[data-rotation="90"] .snap-btn,
+.rotate-shell[data-rotation="-90"] .snap-btn {
+  transform: none;
+  width: auto;
+  min-width: 5.5rem;
+  max-width: 9rem;
+  min-height: 3.25rem;
+  padding: 0.75rem 0.85rem;
   white-space: normal;
   line-height: 1.15;
-  font-size: 0.85rem;
-  transform-origin: center center;
-}
-
-.app-shell[data-pedal-rotation="90"] .snap-btn {
-  transform: rotate(90deg);
-}
-
-.app-shell[data-pedal-rotation="-90"] .snap-btn {
-  transform: rotate(-90deg);
 }
 
 .header {

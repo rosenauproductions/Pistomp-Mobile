@@ -12,8 +12,9 @@
 
 - **Snapshots:** Show all pedalboard snapshots in a horizontal scroll strip (was capped at A/B only)
 - **Effect grid:** Order pedals by MOD signal flow (`connections` + `x`/`y`), stable on every refresh
-- **Display:** Settings → Portrait / 90° / −90° rotates pedals + snapshots in place (chrome stays put)
-- **Display:** Lock portrait orientation when possible so in-place rotate is not double-applied
+- **Display:** Settings → Portrait / 90° / −90° rotates the whole UI (CSS shell)
+- **Display:** In ±90°, pedal cards lay out so the name stays on the visual top; snapshots stay easy to hit
+- **Display:** Lock portrait orientation when possible so shell rotate is not double-applied
 
 Work in progress on `main` (target **1.2.1**). Stable **1.2.0** is tag `v1.2.0`; **1.1.0** remains on `v1.1.0` / `release/1.1.x` for hotfixes only.
 

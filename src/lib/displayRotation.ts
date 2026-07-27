@@ -21,8 +21,7 @@ export function setDisplayRotation(rotation: DisplayRotation): void {
 }
 
 /**
- * Lock device orientation so the browser does not fight in-place pedal/snapshot rotate.
- * Chrome stays portrait; only pedals/snapshots CSS-rotate — keep the phone portrait-locked.
+ * Keep the phone portrait-locked so shell CSS ±90° is not double-applied by the browser.
  * Best chance of success: call from a tap (Settings). May no-op on plain HTTP / non-PWA.
  */
 export async function lockDisplayOrientation(_rotation: DisplayRotation): Promise<void> {

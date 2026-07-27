@@ -134,8 +134,8 @@ export function SettingsSheet({
             ))}
           </div>
           <p className="runtime-mode-hint">
-            Rotates pedals and snapshots in place (chrome stays put). Locks portrait orientation
-            when possible (best in Add to Home Screen). No reconnect needed.
+            Rotates the whole UI for landscape. Pedals keep the name on top; snapshots stack.
+            Locks portrait when possible (best in Add to Home Screen). No reconnect needed.
           </p>
         </div>
 

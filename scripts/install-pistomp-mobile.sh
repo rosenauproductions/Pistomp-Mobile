@@ -14,6 +14,19 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${REPO_ROOT}"
 
+if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "MINGW"* ]] || [[ "$(uname -s)" == "CYGWIN"* ]]; then
+  cat <<'EOF'
+This script installs on the Pi-Stomp, not on your computer.
+
+  ssh pistomp@pistomp.local
+  cd ~/Pistomp-Mobile
+  bash scripts/install-pistomp-mobile.sh
+
+For updates: bash scripts/update-pistomp-mobile.sh
+EOF
+  exit 1
+fi
+
 REBOOT=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
