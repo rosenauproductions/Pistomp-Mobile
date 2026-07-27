@@ -104,6 +104,61 @@ body.display-rotated {
   gap: 0.5rem;
 }
 
+/* Landscape display: reorient each pedal card (horizontal stompbox layout) */
+.rotate-shell[data-rotation="90"] .grid,
+.rotate-shell[data-rotation="-90"] .grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.rotate-shell[data-rotation="90"] .effect,
+.rotate-shell[data-rotation="-90"] .effect {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 4.5rem;
+  padding: 0.45rem 0.55rem 0.45rem 0.7rem;
+}
+
+.rotate-shell[data-rotation="90"] .effect-head,
+.rotate-shell[data-rotation="-90"] .effect-head {
+  flex: 1;
+  min-width: 0;
+}
+
+.rotate-shell[data-rotation="90"] .effect-name,
+.rotate-shell[data-rotation="-90"] .effect-name {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  -webkit-mask-image: none;
+  mask-image: none;
+  font-size: 0.9rem;
+}
+
+.rotate-shell[data-rotation="90"] .stomp-pedal,
+.rotate-shell[data-rotation="-90"] .stomp-pedal {
+  margin-top: 0;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.45rem;
+  flex-shrink: 0;
+}
+
+/* +90: footswitch toward the physical bottom edge when phone is landscape */
+.rotate-shell[data-rotation="90"] .stomp-pedal {
+  order: -1;
+  flex-direction: row-reverse;
+}
+
+.rotate-shell[data-rotation="90"] .stomp-switch,
+.rotate-shell[data-rotation="-90"] .stomp-switch {
+  max-width: 3.85rem;
+  margin: 0;
+}
+
 .header {
   display: flex;
   align-items: center;

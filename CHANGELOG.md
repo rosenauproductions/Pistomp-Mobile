@@ -13,6 +13,7 @@
 - **Snapshots:** Show all pedalboard snapshots in a horizontal scroll strip (was capped at A/B only)
 - **Effect grid:** Order pedals by MOD signal flow (`connections` + `x`/`y`), stable on every refresh
 - **Display:** Settings → Portrait / 90° / −90° visual rotate (CSS transform, persisted)
+- **Display:** In ±90° mode, effect cards use landscape pedal orientation (horizontal stomp + name)
 
 Work in progress on `main` (target **1.2.1**). Stable **1.2.0** is tag `v1.2.0`; **1.1.0** remains on `v1.1.0` / `release/1.1.x` for hotfixes only.
 
