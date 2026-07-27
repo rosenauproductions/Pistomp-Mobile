@@ -4,3 +4,8 @@ __pycache__
 .DS_Store
 *.local
 tsconfig.tsbuildinfo
+dist-deb/
+debian/files
+debian/.debhelper/
+debian/pistomp-mobile/
+*.deb

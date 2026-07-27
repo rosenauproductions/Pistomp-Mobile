@@ -1,0 +1,15 @@
+[Unit]
+Description=Pistomp Mobile WiFi API
+After=network-online.target NetworkManager.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/bin/python3 /opt/pistomp-mobile/pistomp-wifi-api.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -7,6 +7,7 @@ import { InstallHealthPanel } from "./InstallHealthPanel";
 import { NetworkHints } from "./NetworkHints";
 import { WifiAdminControls } from "./WifiAdminControls";
 import { getAppVersionLabel } from "../lib/appVersion";
+import type { DisplayRotation } from "../lib/displayRotation";
 import {
   isOnPiStompDevice,
   isRuntimeModeToggleVisible,
@@ -21,6 +22,8 @@ interface Props {
   runtimeMode: RuntimeMode;
   hardwareInput: HardwareInputState | null;
   wifiAdminAvailable: boolean;
+  displayRotation: DisplayRotation;
+  onDisplayRotationChange: (rotation: DisplayRotation) => void;
   onRefreshWifi: () => Promise<WifiStatus | null>;
   onClose: () => void;
   onSave: (host: string) => void;
@@ -41,6 +44,8 @@ export function SettingsSheet({
   runtimeMode,
   hardwareInput,
   wifiAdminAvailable,
+  displayRotation,
+  onDisplayRotationChange,
   onRefreshWifi,
   onClose,
   onSave,
@@ -106,6 +111,32 @@ export function SettingsSheet({
         <p className="settings-version">
           Version <strong>{getAppVersionLabel()}</strong>
         </p>
+
+        <div className="runtime-mode-block">
+          <span className="admin-subsection-label">Display</span>
+          <div className="display-rotation-toggle" role="group" aria-label="Display rotation">
+            {(
+              [
+                { id: "portrait", label: "Portrait" },
+                { id: "90", label: "90°" },
+                { id: "-90", label: "−90°" },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                className={`runtime-mode-btn ${displayRotation === opt.id ? "active" : ""}`}
+                aria-pressed={displayRotation === opt.id}
+                onClick={() => onDisplayRotationChange(opt.id)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <p className="runtime-mode-hint">
+            Rotates the whole UI for holding the phone sideways. Same layout — no reconnect needed.
+          </p>
+        </div>
 
         {showHardware && (
           <div className="runtime-mode-block admin-block">

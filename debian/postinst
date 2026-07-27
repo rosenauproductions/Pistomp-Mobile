@@ -1,0 +1,71 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+  configure)
+    mkdir -p /home/pistomp/data 2>/dev/null || true
+    chmod 775 /home/pistomp/data 2>/dev/null || true
+    mkdir -p /boot/firmware/pistomp-mobile 2>/dev/null || true
+    chmod 755 /boot/firmware/pistomp-mobile 2>/dev/null || true
+    if [ -f /home/pistomp/data/last.json ]; then
+      chmod o+r /home/pistomp/data/last.json 2>/dev/null || true
+    fi
+    chmod o+x /home/pistomp /home/pistomp/data 2>/dev/null || true
+
+    chmod 755 /opt/pistomp-mobile/pistomp-audio-api.py \
+      /opt/pistomp-mobile/pistomp-wifi-api.py 2>/dev/null || true
+
+    if [ -d /etc/nginx/sites-enabled ]; then
+      ln -sf /etc/nginx/sites-available/pistomp-mobile \
+        /etc/nginx/sites-enabled/pistomp-mobile
+      # Fresh apt nginx default site binds :80 — MOD-UI already owns it.
+      rm -f /etc/nginx/sites-enabled/default
+    fi
+
+    # Vanilla Pi-Stomp: replace embedded listen 8080 block with include once.
+    if [ -f /etc/nginx/nginx.conf ] \
+      && [ -f /etc/nginx/pistomp-mobile-8080.conf ] \
+      && grep -q 'listen 8080' /etc/nginx/nginx.conf 2>/dev/null \
+      && ! grep -q 'pistomp-mobile-8080.conf' /etc/nginx/nginx.conf 2>/dev/null; then
+      cp -a /etc/nginx/nginx.conf "/etc/nginx/nginx.conf.bak.pistomp-mobile"
+      python3 - <<'PY' || true
+import re
+from pathlib import Path
+conf = Path("/etc/nginx/nginx.conf")
+text = conf.read_text()
+pat = re.compile(
+    r"    server \{.*?listen\s+8080.*?\n    \}\n",
+    re.DOTALL,
+)
+if pat.search(text):
+    conf.write_text(
+        pat.sub("    include /etc/nginx/pistomp-mobile-8080.conf;\n", text, count=1)
+    )
+PY
+    fi
+
+    if command -v systemctl >/dev/null 2>&1; then
+      systemctl daemon-reload || true
+      systemctl enable pistomp-audio-api.service \
+        pistomp-wifi-api.service \
+        pistomp-wifi-mode-apply.service \
+        nginx 2>/dev/null || true
+      if ! systemctl is-system-running 2>&1 | grep -qi chroot; then
+        systemctl restart pistomp-audio-api.service 2>/dev/null \
+          || systemctl start pistomp-audio-api.service 2>/dev/null || true
+        systemctl restart pistomp-wifi-api.service 2>/dev/null \
+          || systemctl start pistomp-wifi-api.service 2>/dev/null || true
+        if command -v nginx >/dev/null 2>&1; then
+          if nginx -t 2>/dev/null; then
+            systemctl start nginx 2>/dev/null || systemctl restart nginx 2>/dev/null || true
+            systemctl reload nginx 2>/dev/null || true
+          fi
+        fi
+      fi
+    fi
+    ;;
+esac
+
+#DEBHELPER#
+
+exit 0

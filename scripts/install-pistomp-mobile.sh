@@ -100,10 +100,7 @@ install_overlayroot() {
   if ! sudo "${chroot_bin}" /bin/bash -c '
 set -euo pipefail
 mkdir -p /home/pistomp/Pistomp-Mobile
-cp -a /proc/1/root/boot/firmware/pistomp-deploy/dist \
-      /proc/1/root/boot/firmware/pistomp-deploy/install-on-pistomp.sh \
-      /proc/1/root/boot/firmware/pistomp-deploy/scripts \
-      /home/pistomp/Pistomp-Mobile/
+cp -a /proc/1/root/boot/firmware/pistomp-deploy/. /home/pistomp/Pistomp-Mobile/
 cd /home/pistomp/Pistomp-Mobile
 bash install-on-pistomp.sh
 echo CHROOT_INSTALL_OK

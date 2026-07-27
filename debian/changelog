@@ -1,0 +1,6 @@
+pistomp-mobile (1.2.1~dev-1) UNRELEASED; urgency=medium
+
+  * Initial Debian packaging (dual path with shell install scripts).
+  * Ships prebuilt dist/, ALSA/WiFi APIs, systemd units, nginx :8080 site.
+
+ -- Rosenau Productions <rosenauproductions@gmail.com>  Mon, 27 Jul 2026 13:00:00 -0500

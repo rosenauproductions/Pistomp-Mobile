@@ -1,0 +1,12 @@
+[Unit]
+Description=Apply Pistomp-Mobile saved WiFi mode on boot
+After=network-online.target NetworkManager.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/pistomp-mobile/pistomp-wifi-api.py --apply-saved-mode
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -6,11 +6,13 @@
 
 - **Fix:** Fresh `apt install nginx` on vanilla Pi-Stomp — disable Debian default `:80` site (MOD-UI owns port 80), `enable`/`start` nginx instead of reload-only, post-install `:8080` verify
 - **Docs:** DEPLOYMENT troubleshooting for nginx not active; use update script when `~/Pistomp-Mobile` already exists
+- **Deb packaging:** `debian/` + `packaging/` + `scripts/build-deb.sh`; installer prefers `.deb` when available, keeps git/script file-copy for new users
 
 ### UI
 
 - **Snapshots:** Show all pedalboard snapshots in a horizontal scroll strip (was capped at A/B only)
 - **Effect grid:** Order pedals by MOD signal flow (`connections` + `x`/`y`), stable on every refresh
+- **Display:** Settings → Portrait / 90° / −90° visual rotate (CSS transform, persisted)
 
 Work in progress on `main` (target **1.2.1**). Stable **1.2.0** is tag `v1.2.0`; **1.1.0** remains on `v1.1.0` / `release/1.1.x` for hotfixes only.
 

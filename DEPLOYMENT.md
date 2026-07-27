@@ -64,6 +64,31 @@ bash scripts/update-pistomp-mobile.sh --tag v1.1.0 --reboot
 
 `--reboot` is optional on vanilla; on headless it is required so nginx and systemd pick up the install.
 
+### Optional — Debian package (`.deb`)
+
+The same files can be installed as **`pistomp-mobile`** via `dpkg`. Script install remains the default for new users.
+
+**Build a `.deb`** (Mac or Pi; needs prebuilt `dist/`):
+
+```bash
+cd ~/Pistomp-Mobile   # or your checkout
+bash scripts/build-deb.sh
+# → dist-deb/pistomp-mobile_*_arm64.deb
+```
+
+**Install on the Pi:**
+
+```bash
+sudo dpkg -i dist-deb/pistomp-mobile_*.deb
+sudo apt-get install -y -f    # pull nginx/python3 if needed
+```
+
+`install-on-pistomp.sh` **prefers** a local `.deb` when one can be built/installed; otherwise it falls back to the file-copy script path. If the package is already dpkg-managed, do not overwrite with `cp` — rebuild the `.deb` or `apt-get install --only-upgrade pistomp-mobile`.
+
+**Recovery Update menu:** packages only appear there when published to the pi-Stomp apt repo (`Origin: pistomp`). That is a separate step (contribute `debpkgs/pistomp-mobile` to pi-gen-pistomp). Local `.deb` / script install does not require that.
+
+Force the old file-copy path (skip deb): `PISTOMP_MOBILE_FORCE_FILE_COPY=1 sudo bash install-on-pistomp.sh`
+
 ### Requirements
 
 - `git` on the Pi (`sudo apt-get install -y git` if missing)

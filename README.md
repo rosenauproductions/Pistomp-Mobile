@@ -39,6 +39,8 @@ bash scripts/install-pistomp-mobile.sh --reboot
 
 If `~/Pistomp-Mobile` already exists, skip `git clone` and run the update script instead.
 
+Optional `.deb` packaging (same layout, for apt / future recovery OTA): see [DEPLOYMENT.md](./DEPLOYMENT.md#optional--debian-package-deb).
+
 Updates:
 
 ```bash

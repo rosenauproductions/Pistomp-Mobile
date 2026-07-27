@@ -1,0 +1,8 @@
+dist /opt/pistomp-mobile/
+scripts/pistomp-audio-api.py /opt/pistomp-mobile/
+scripts/pistomp-wifi-api.py /opt/pistomp-mobile/
+packaging/systemd/pistomp-audio-api.service /lib/systemd/system/
+packaging/systemd/pistomp-wifi-api.service /lib/systemd/system/
+packaging/systemd/pistomp-wifi-mode-apply.service /lib/systemd/system/
+packaging/nginx/pistomp-mobile.conf /etc/nginx/sites-available/pistomp-mobile
+packaging/nginx/pistomp-mobile.conf /etc/nginx/pistomp-mobile-8080.conf

@@ -54,6 +54,56 @@ input {
   margin: 0 auto;
 }
 
+/* Visual landscape: same portrait layout, CSS-rotated to fill the phone */
+.rotate-shell {
+  min-height: 100dvh;
+}
+
+.rotate-shell[data-rotation="90"],
+.rotate-shell[data-rotation="-90"] {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100dvh;
+  height: 100dvw;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--bg);
+  z-index: 1;
+}
+
+.rotate-shell[data-rotation="90"] {
+  transform: rotate(90deg) translateY(-100%);
+  transform-origin: top left;
+}
+
+.rotate-shell[data-rotation="-90"] {
+  transform: rotate(-90deg) translateX(-100%);
+  transform-origin: top left;
+}
+
+.rotate-shell[data-rotation="90"] .app,
+.rotate-shell[data-rotation="-90"] .app {
+  min-height: 100%;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.rotate-shell[data-rotation="90"] .sheet,
+.rotate-shell[data-rotation="-90"] .sheet {
+  max-height: 70%;
+}
+
+body.display-rotated {
+  overflow: hidden;
+}
+
+.display-rotation-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.5rem;
+}
+
 .header {
   display: flex;
   align-items: center;

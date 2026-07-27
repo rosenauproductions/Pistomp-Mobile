@@ -1,0 +1,18 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+  remove|purge)
+    rm -f /etc/nginx/sites-enabled/pistomp-mobile
+    if command -v systemctl >/dev/null 2>&1; then
+      systemctl daemon-reload 2>/dev/null || true
+      if command -v nginx >/dev/null 2>&1 && nginx -t 2>/dev/null; then
+        systemctl reload nginx 2>/dev/null || true
+      fi
+    fi
+    ;;
+esac
+
+#DEBHELPER#
+
+exit 0

@@ -1,0 +1,16 @@
+Source: pistomp-mobile
+Section: web
+Priority: optional
+Maintainer: Rosenau Productions <rosenauproductions@gmail.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://github.com/rosenauproductions/Pistomp-Mobile
+Rules-Requires-Root: no
+
+Package: pistomp-mobile
+Architecture: arm64
+Depends: ${misc:Depends}, nginx, python3
+Description: Mobile web UI for Pi-Stomp (nginx :8080)
+ Lightweight phone UI for controlling Pi-Stomp / MOD-UI over the
+ device hotspot. Serves the app on port 8080 and proxies MOD API
+ paths to localhost:80. Includes small ALSA and WiFi helper APIs.

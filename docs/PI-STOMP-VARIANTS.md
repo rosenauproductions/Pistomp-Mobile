@@ -6,6 +6,8 @@
 
 Other Pi-Stomp builds (vanilla pi-gen, full PCB Pi 5, writable root) use the same app and install scripts; only the **deploy path** differs.
 
+**Field comparison (vanilla vs headless acoustic):** [VANILLA-VS-HEADLESS.md](./VANILLA-VS-HEADLESS.md) — probe results, encoder YAML diff, and what belongs in hardware diff vs OS image.
+
 ---
 
 ## WiFi hotspot ↔ router (same as System menu)
