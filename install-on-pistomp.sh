@@ -65,6 +65,16 @@ try_deb_install() {
   local deb=""
   deb="$(find_deb || true)"
 
+  # Stale dist-deb/*.deb was the usual “git updated but :8080 did not” bug:
+  # rebuild whenever repo dist/ is newer than the packaged .deb.
+  if [[ -n "${deb}" ]] && [[ -f "${SCRIPT_DIR}/scripts/build-deb.sh" ]] \
+    && command -v dpkg-deb >/dev/null 2>&1 \
+    && [[ "${SCRIPT_DIR}/dist/index.html" -nt "${deb}" ]]; then
+    echo "dist/ is newer than $(basename "${deb}") — rebuilding .deb..."
+    bash "${SCRIPT_DIR}/scripts/build-deb.sh"
+    deb="$(find_deb || true)"
+  fi
+
   if [[ -z "${deb}" ]] && [[ -f "${SCRIPT_DIR}/scripts/build-deb.sh" ]] \
     && command -v dpkg-deb >/dev/null 2>&1; then
     echo "No .deb found — building one from this tree..."
