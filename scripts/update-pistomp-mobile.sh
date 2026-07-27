@@ -70,4 +70,8 @@ if [[ "${PULL}" -eq 1 ]]; then
   fi
 fi
 
-exec bash "${REPO_ROOT}/scripts/install-pistomp-mobile.sh" "${INSTALL_ARGS[@]}"
+if ((${#INSTALL_ARGS[@]} > 0)); then
+  exec bash "${REPO_ROOT}/scripts/install-pistomp-mobile.sh" "${INSTALL_ARGS[@]}"
+else
+  exec bash "${REPO_ROOT}/scripts/install-pistomp-mobile.sh"
+fi
