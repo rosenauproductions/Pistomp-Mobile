@@ -11,6 +11,7 @@ import { useStomp } from "./hooks/useStomp";
 import type { EffectPlugin } from "./api/types";
 import {
   getDisplayRotation,
+  lockDisplayOrientation,
   setDisplayRotation as persistDisplayRotation,
   type DisplayRotation,
 } from "./lib/displayRotation";
@@ -27,11 +28,13 @@ export default function App() {
   const setDisplayRotation = (rotation: DisplayRotation) => {
     persistDisplayRotation(rotation);
     setDisplayRotationState(rotation);
+    void lockDisplayOrientation(rotation);
   };
 
   useEffect(() => {
     const rotated = displayRotation !== "portrait";
     document.body.classList.toggle("display-rotated", rotated);
+    void lockDisplayOrientation(displayRotation);
     return () => document.body.classList.remove("display-rotated");
   }, [displayRotation]);
 
