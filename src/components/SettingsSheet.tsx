@@ -114,10 +114,11 @@ export function SettingsSheet({
 
         <div className="runtime-mode-block">
           <span className="admin-subsection-label">Display</span>
-          <div className="display-rotation-toggle" role="group" aria-label="Display rotation">
+          <div className="display-rotation-toggle" role="group" aria-label="Display mode">
             {(
               [
                 { id: "portrait", label: "Portrait" },
+                { id: "landscape", label: "Landscape" },
                 { id: "90", label: "90°" },
                 { id: "-90", label: "−90°" },
               ] as const
@@ -134,8 +135,8 @@ export function SettingsSheet({
             ))}
           </div>
           <p className="runtime-mode-hint">
-            Does not rotate the whole UI. Only each pedal rotates inside its card (±90°). No
-            reconnect needed.
+            Portrait: normal layout. Landscape: wide layout, no CSS rotate. 90° / −90°: pedals
+            spin in their slots only. No reconnect needed.
           </p>
         </div>
 

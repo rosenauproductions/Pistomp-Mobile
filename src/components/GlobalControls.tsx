@@ -9,7 +9,7 @@ export function GlobalControls({ controls, onChange }: Props) {
   if (controls.length === 0) return null;
 
   return (
-    <section>
+    <section className="global-controls">
       <h2 className="section-title">Quick controls</h2>
       {controls.map((ctrl) => (
         <div key={ctrl.kind} className="global-row">

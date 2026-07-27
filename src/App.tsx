@@ -45,7 +45,11 @@ export default function App() {
   return (
     <div
       className="app-shell"
-      data-pedal-rotation={displayRotation === "portrait" ? undefined : displayRotation}
+      data-display={displayRotation}
+      data-pedal-rotation={
+        displayRotation === "90" || displayRotation === "-90" ? displayRotation : undefined
+      }
+      data-layout={displayRotation === "landscape" ? "landscape" : undefined}
     >
       <div className={`app ${stomp.busy ? "busy-overlay" : ""}`} aria-busy={stomp.busy}>
         <Header
@@ -92,30 +96,34 @@ export default function App() {
             Change pedalboard
           </button>
 
-          <h2 className="section-title">
-            Snapshots
-            {snapshotCount(stomp.snapshots) > 0 ? ` (${snapshotCount(stomp.snapshots)})` : ""}
-          </h2>
-          <SnapshotBar
-            snapshots={stomp.snapshots}
-            activeId={stomp.activeSnapshot}
-            onSelect={(id) => void stomp.loadSnapshot(id)}
-          />
+          <div className="snapshot-panel">
+            <h2 className="section-title">
+              Snapshots
+              {snapshotCount(stomp.snapshots) > 0 ? ` (${snapshotCount(stomp.snapshots)})` : ""}
+            </h2>
+            <SnapshotBar
+              snapshots={stomp.snapshots}
+              activeId={stomp.activeSnapshot}
+              onSelect={(id) => void stomp.loadSnapshot(id)}
+            />
+          </div>
 
           <GlobalControls controls={stomp.globals} onChange={(c, v) => void stomp.setGlobalValue(c, v)} />
 
-          <div className="strip">
-            <span>Effects</span>
-            <span>
-              <strong>{stomp.activeCount}</strong> active
-            </span>
-          </div>
+          <div className="effects-panel">
+            <div className="strip">
+              <span>Effects</span>
+              <span>
+                <strong>{stomp.activeCount}</strong> active
+              </span>
+            </div>
 
-          <EffectGrid
-            plugins={stomp.board.plugins}
-            onToggle={(p) => void stomp.toggleBypass(p)}
-            onOpenSettings={openEffectSettings}
-          />
+            <EffectGrid
+              plugins={stomp.board.plugins}
+              onToggle={(p) => void stomp.toggleBypass(p)}
+              onOpenSettings={openEffectSettings}
+            />
+          </div>
         </main>
 
         <PedalboardSheet

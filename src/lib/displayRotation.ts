@@ -1,11 +1,11 @@
-export type DisplayRotation = "portrait" | "90" | "-90";
+export type DisplayRotation = "portrait" | "landscape" | "90" | "-90";
 
 const KEY = "pistomp-mobile-display-rotation";
 
 export function getDisplayRotation(): DisplayRotation {
   try {
     const v = localStorage.getItem(KEY);
-    if (v === "90" || v === "-90" || v === "portrait") return v;
+    if (v === "90" || v === "-90" || v === "portrait" || v === "landscape") return v;
   } catch {
     /* private mode */
   }
@@ -21,16 +21,21 @@ export function setDisplayRotation(rotation: DisplayRotation): void {
 }
 
 /**
- * Prefer portrait lock so the browser does not also rotate the page
- * while Display ±90 only spins each pedal in its slot.
+ * Portrait / ±90: prefer portrait lock (in-slot pedal spin must not fight the browser).
+ * Landscape: prefer landscape lock so the 0°-rotation layout can use the wide viewport.
  */
-export async function lockDisplayOrientation(_rotation: DisplayRotation): Promise<void> {
+export async function lockDisplayOrientation(rotation: DisplayRotation): Promise<void> {
   const orient = screen.orientation as ScreenOrientation & {
     lock?: (orientation: string) => Promise<void>;
   };
   if (typeof orient?.lock !== "function") return;
 
-  for (const type of ["portrait", "portrait-primary"] as const) {
+  const types =
+    rotation === "landscape"
+      ? (["landscape", "landscape-primary", "landscape-secondary"] as const)
+      : (["portrait", "portrait-primary"] as const);
+
+  for (const type of types) {
     try {
       await orient.lock(type);
       return;
