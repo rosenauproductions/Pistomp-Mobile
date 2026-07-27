@@ -21,8 +21,8 @@ export function setDisplayRotation(rotation: DisplayRotation): void {
 }
 
 /**
- * Keep the phone portrait-locked so shell CSS ±90° is not double-applied by the browser.
- * Best chance of success: call from a tap (Settings). May no-op on plain HTTP / non-PWA.
+ * Prefer portrait lock so the browser does not also rotate the page
+ * while Display ±90 only spins each pedal in its slot.
  */
 export async function lockDisplayOrientation(_rotation: DisplayRotation): Promise<void> {
   const orient = screen.orientation as ScreenOrientation & {

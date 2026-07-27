@@ -134,8 +134,8 @@ export function SettingsSheet({
             ))}
           </div>
           <p className="runtime-mode-hint">
-            Rotates the whole UI for landscape. Pedals keep the name on top; snapshots stack.
-            Locks portrait when possible (best in Add to Home Screen). No reconnect needed.
+            Does not rotate the whole UI. Only each pedal rotates inside its card (±90°). No
+            reconnect needed.
           </p>
         </div>
 
