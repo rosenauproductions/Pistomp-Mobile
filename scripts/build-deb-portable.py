@@ -37,9 +37,12 @@ def main() -> None:
         (stage / "DEBIAN").mkdir()
 
         shutil.copytree(repo / "dist", stage / "opt/pistomp-mobile/dist", dirs_exist_ok=True)
-        for name in ("pistomp-audio-api.py", "pistomp-wifi-api.py"):
+        for name in ("pistomp-audio-api.py", "pistomp-wifi-api.py", "pistomp-poweroff.sh"):
+            src = repo / "scripts" / name
+            if not src.is_file():
+                continue
             dst = stage / "opt/pistomp-mobile" / name
-            shutil.copy2(repo / "scripts" / name, dst)
+            shutil.copy2(src, dst)
             os.chmod(dst, 0o755)
         for svc in (repo / "packaging/systemd").glob("*.service"):
             shutil.copy2(svc, stage / "lib/systemd/system" / svc.name)

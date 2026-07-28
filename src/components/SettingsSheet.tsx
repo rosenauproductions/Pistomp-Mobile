@@ -13,7 +13,7 @@ import {
   isRuntimeModeToggleVisible,
   type RuntimeMode,
 } from "../lib/runtimeMode";
-import { requestPiShutdown } from "../api/pistompWifi";
+import { requestPiShutdown, waitForPiPoweroff } from "../api/pistompWifi";
 import { Sheet } from "./Sheet";
 
 interface Props {
@@ -116,8 +116,15 @@ export function SettingsSheet({
       setShutdownConfirm(false);
       return;
     }
-    // Keep "Shutting down…" — the Pi should power off within a few seconds.
-    setShutdownError(null);
+    const wait = await waitForPiPoweroff();
+    if (wait.poweredOff) {
+      // Keep "Shutting down…" — connection is gone.
+      setShutdownError(null);
+      return;
+    }
+    setShutdownBusy(false);
+    setShutdownConfirm(false);
+    setShutdownError(wait.error ?? "Shutdown did not power off the Pi");
   };
 
   useEffect(() => {

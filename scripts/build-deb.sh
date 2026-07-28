@@ -46,6 +46,7 @@ build_with_dpkg_deb() {
   cp -a dist/. "${stage}/opt/pistomp-mobile/dist/"
   install -m 755 scripts/pistomp-audio-api.py "${stage}/opt/pistomp-mobile/"
   install -m 755 scripts/pistomp-wifi-api.py "${stage}/opt/pistomp-mobile/"
+  install -m 755 scripts/pistomp-poweroff.sh "${stage}/opt/pistomp-mobile/"
   install -m 644 packaging/systemd/*.service "${stage}/lib/systemd/system/"
   install -m 644 packaging/nginx/pistomp-mobile.conf \
     "${stage}/etc/nginx/sites-available/pistomp-mobile"

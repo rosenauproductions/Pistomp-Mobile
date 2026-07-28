@@ -193,12 +193,15 @@ EOF
 
   install -m 755 scripts/pistomp-audio-api.py "${INSTALL_DIR}/pistomp-audio-api.py"
   install -m 755 scripts/pistomp-wifi-api.py "${INSTALL_DIR}/pistomp-wifi-api.py"
+  install -m 755 scripts/pistomp-poweroff.sh "${INSTALL_DIR}/pistomp-poweroff.sh"
   install -m 644 "${PACKAGING}/systemd/pistomp-audio-api.service" \
     /etc/systemd/system/pistomp-audio-api.service
   install -m 644 "${PACKAGING}/systemd/pistomp-wifi-api.service" \
     /etc/systemd/system/pistomp-wifi-api.service
   install -m 644 "${PACKAGING}/systemd/pistomp-wifi-mode-apply.service" \
     /etc/systemd/system/pistomp-wifi-mode-apply.service
+  install -m 644 "${PACKAGING}/systemd/pistomp-mobile-poweroff.service" \
+    /etc/systemd/system/pistomp-mobile-poweroff.service
 
   mkdir -p /home/pistomp/data
   chmod 775 /home/pistomp/data 2>/dev/null || true

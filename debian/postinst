@@ -13,7 +13,8 @@ case "$1" in
     chmod o+x /home/pistomp /home/pistomp/data 2>/dev/null || true
 
     chmod 755 /opt/pistomp-mobile/pistomp-audio-api.py \
-      /opt/pistomp-mobile/pistomp-wifi-api.py 2>/dev/null || true
+      /opt/pistomp-mobile/pistomp-wifi-api.py \
+      /opt/pistomp-mobile/pistomp-poweroff.sh 2>/dev/null || true
 
     if [ -d /etc/nginx/sites-enabled ]; then
       ln -sf /etc/nginx/sites-available/pistomp-mobile \

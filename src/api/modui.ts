@@ -480,6 +480,8 @@ export async function runConnectionProbes(
   lines.push(await fetchProbe("/pistomp-last.json"));
   lines.push(await fetchProbe("/pistomp/audio/controls"));
   lines.push(await fetchProbe("/pistomp/wifi/status"));
+  lines.push(await fetchProbe("/pistomp/wifi/capabilities"));
+  lines.push(await fetchProbe("/pistomp/wifi/poweroff-log"));
 
   if (!plugin) {
     lines.push("  (no plugin — load a pedalboard first)");

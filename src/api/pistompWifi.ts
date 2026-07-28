@@ -89,7 +89,14 @@ export async function requestPiShutdown(): Promise<{ ok: boolean; error?: string
       headers: { "Content-Type": "application/json" },
       body: "{}",
     });
-    const data = (await res.json()) as { ok?: boolean; error?: string };
+    const data = (await res.json()) as { ok?: boolean; error?: string; message?: string };
+    if (res.status === 404) {
+      return {
+        ok: false,
+        error:
+          "Shutdown API missing — run update on the Pi (needs pistomp-wifi-api with /shutdown).",
+      };
+    }
     if (!res.ok) {
       return { ok: false, error: data.error ?? `HTTP ${res.status}` };
     }
@@ -100,4 +107,33 @@ export async function requestPiShutdown(): Promise<{ ok: boolean; error?: string
       error: e instanceof Error ? e.message : "Network request failed",
     };
   }
+}
+
+/** After POST /shutdown, poll until the Pi drops (success) or stays up (failure). */
+export async function waitForPiPoweroff(
+  timeoutMs = 12000,
+): Promise<{ poweredOff: boolean; error?: string }> {
+  const started = Date.now();
+  let sawReachable = false;
+  while (Date.now() - started < timeoutMs) {
+    await new Promise((r) => setTimeout(r, 800));
+    try {
+      const res = await fetch(apiUrl("/status"), { cache: "no-store" });
+      if (res.ok) {
+        sawReachable = true;
+        continue;
+      }
+    } catch {
+      // Network error = likely powered off (or WiFi dropped mid-shutdown).
+      return { poweredOff: true };
+    }
+  }
+  if (!sawReachable) {
+    return { poweredOff: true };
+  }
+  return {
+    poweredOff: false,
+    error:
+      "Pi is still running after shutdown request. Update on the Pi, then check QA → /pistomp/wifi/poweroff-log.",
+  };
 }

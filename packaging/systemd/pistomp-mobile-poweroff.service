@@ -1,0 +1,11 @@
+[Unit]
+Description=Pistomp Mobile system poweroff
+DefaultDependencies=no
+Conflicts=shutdown.target
+Before=shutdown.target
+
+[Service]
+Type=oneshot
+# Same as pi-stomp LCD System shutdown (modalapi).
+ExecStart=/bin/systemctl --no-wall poweroff
+RemainAfterExit=no

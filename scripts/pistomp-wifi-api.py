@@ -672,34 +672,94 @@ def disable_hotspot() -> tuple[bool, Optional[str]]:
     return apply_router_mode(router_name, persist=True)
 
 
+POWEROFF_LOG = "/tmp/pistomp-poweroff.log"
+
+
+def _poweroff_log(msg: str) -> None:
+    line = f"{time.strftime('%Y-%m-%dT%H:%M:%S')} {msg}"
+    print(f"pistomp-wifi-api: {msg}", flush=True)
+    try:
+        with open(POWEROFF_LOG, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except OSError:
+        pass
+
+
 def schedule_system_poweroff() -> None:
     """Same outcome as pi-stomp LCD System shutdown (systemctl poweroff).
 
-    Run detached so the HTTP worker / this service stopping cannot cancel it.
+    Prefer a dedicated oneshot unit / double-fork so poweroff is not cancelled
+    when this wifi-api service is stopped as part of shutdown.
     """
-    # Prefer systemd-run so poweroff is not tied to this service's cgroup.
-    attempts: list[list[str]] = [
+    _poweroff_log(f"schedule_system_poweroff uid={os.getuid()} pid={os.getpid()}")
+
+    # 1) Dedicated oneshot unit (installed by install-on-pistomp / .deb)
+    try:
+        proc = subprocess.run(
+            ["systemctl", "start", "--no-block", "pistomp-mobile-poweroff.service"],
+            capture_output=True,
+            timeout=10,
+            check=False,
+        )
+        err = (proc.stderr or proc.stdout or b"").decode("utf-8", "replace").strip()
+        _poweroff_log(f"systemctl start pistomp-mobile-poweroff rc={proc.returncode} {err}")
+        if proc.returncode == 0:
+            return
+    except Exception as e:
+        _poweroff_log(f"systemctl start pistomp-mobile-poweroff exception: {e}")
+
+    # 2) systemd-run timer (survives this service stopping)
+    for cmd in (
         ["systemd-run", "--on-active=1s", "/bin/systemctl", "--no-wall", "poweroff"],
         ["systemd-run", "--on-active=1s", "/bin/systemctl", "--no-wall", "--force", "poweroff"],
-        ["systemctl", "--no-wall", "poweroff"],
-        ["systemctl", "--no-wall", "--force", "poweroff"],
-        ["/sbin/shutdown", "-h", "now"],
-        ["/sbin/poweroff", "-f"],
-    ]
-    for cmd in attempts:
+    ):
         try:
-            print(f"pistomp-wifi-api: poweroff attempt: {' '.join(cmd)}", flush=True)
-            proc = subprocess.run(cmd, capture_output=True, timeout=15, check=False)
-            if proc.returncode == 0:
-                print("pistomp-wifi-api: poweroff scheduled OK", flush=True)
-                return
+            proc = subprocess.run(cmd, capture_output=True, timeout=10, check=False)
             err = (proc.stderr or proc.stdout or b"").decode("utf-8", "replace").strip()
-            print(f"pistomp-wifi-api: poweroff failed rc={proc.returncode}: {err}", flush=True)
+            _poweroff_log(f"{' '.join(cmd)} rc={proc.returncode} {err}")
+            if proc.returncode == 0:
+                return
         except Exception as e:
-            print(f"pistomp-wifi-api: poweroff exception: {e}", flush=True)
-    # Last resort — mirrors modalapi/mod.py system_menu_shutdown
-    print("pistomp-wifi-api: falling back to os.system sudo poweroff", flush=True)
-    os.system("sudo systemctl --no-wall poweroff")
+            _poweroff_log(f"systemd-run exception: {e}")
+
+    # 3) Detached helper script or double-fork + LCD command
+    candidates = (
+        "/opt/pistomp-mobile/pistomp-poweroff.sh",
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "pistomp-poweroff.sh"),
+    )
+    script = next((p for p in candidates if os.path.isfile(p)), None)
+    if script is not None:
+        try:
+            os.chmod(script, 0o755)
+        except OSError:
+            pass
+        _poweroff_log(f"spawning {script}")
+        subprocess.Popen(
+            ["nohup", "/bin/bash", script],
+            start_new_session=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            close_fds=True,
+        )
+        return
+
+    _poweroff_log("poweroff script missing — double-fork LCD fall-back")
+    try:
+        if os.fork() != 0:
+            return
+        os.setsid()
+        if os.fork() != 0:
+            os._exit(0)
+        time.sleep(0.8)
+        # Exact LCD path (modalapi/mod.py system_menu_shutdown)
+        os.system("sudo systemctl --no-wall poweroff >>%s 2>&1" % POWEROFF_LOG)
+        os.system("systemctl --no-wall poweroff >>%s 2>&1" % POWEROFF_LOG)
+        os.system("/sbin/poweroff -f >>%s 2>&1" % POWEROFF_LOG)
+        os._exit(0)
+    except OSError as e:
+        _poweroff_log(f"fork failed: {e}; inline os.system")
+        os.system("nohup sudo systemctl --no-wall poweroff >>%s 2>&1 &" % POWEROFF_LOG)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -726,6 +786,24 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path.rstrip("/") or "/"
         if path == "/status":
             self._json(200, read_wifi_status())
+            return
+        if path == "/capabilities":
+            self._json(
+                200,
+                {
+                    "ok": True,
+                    "shutdown": True,
+                    "shutdownLog": POWEROFF_LOG,
+                },
+            )
+            return
+        if path == "/poweroff-log":
+            try:
+                with open(POWEROFF_LOG, "r", encoding="utf-8") as f:
+                    text = f.read()[-8000:]
+            except OSError:
+                text = "(no log yet)"
+            self._json(200, {"ok": True, "log": text})
             return
         self._json(404, {"error": "not found"})
 

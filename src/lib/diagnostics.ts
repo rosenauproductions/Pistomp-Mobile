@@ -94,7 +94,7 @@ export async function collectQaReport(ctx: QaContext): Promise<string> {
     "  • QA probes do NOT call /reset/ (that endpoint clears all effects on the Pi).",
   );
   lines.push(
-    "  • WiFi admin: Settings → Admin — requires install-on-pistomp.sh (/pistomp/wifi/).",
+    "  • Shutdown: Settings → System. If it does nothing, check /pistomp/wifi/capabilities (needs shutdown:true) and /tmp/pistomp-poweroff.log on the Pi.",
   );
   lines.push(
     "  • GATE on CollisionDrive is threshold (dB), not stomp; use BYPASS port for stomp in 0.2.2+.",
