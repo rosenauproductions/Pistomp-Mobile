@@ -7,6 +7,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Optional
@@ -708,6 +709,22 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path.rstrip("/") or "/"
+
+        # Same action as pi-stomp LCD System shutdown: systemctl --no-wall poweroff
+        if path == "/shutdown":
+            self._json(200, {"ok": True, "message": "Shutting down"})
+
+            def _poweroff() -> None:
+                time.sleep(0.75)
+                subprocess.run(
+                    ["systemctl", "--no-wall", "poweroff"],
+                    check=False,
+                    capture_output=True,
+                )
+
+            threading.Thread(target=_poweroff, daemon=True).start()
+            return
+
         body = self._read_json_body()
         if body is None:
             self._json(400, {"error": "invalid json"})

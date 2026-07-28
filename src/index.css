@@ -1118,6 +1118,26 @@ input {
   cursor: pointer;
 }
 
+.btn-danger {
+  width: 100%;
+  border: 1px solid var(--danger);
+  border-radius: 10px;
+  padding: 0.85rem;
+  background: transparent;
+  color: var(--danger);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-danger-confirm {
+  background: color-mix(in srgb, var(--danger) 22%, transparent);
+}
+
 .toast {
   position: fixed;
   left: 1rem;

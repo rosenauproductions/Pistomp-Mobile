@@ -13,6 +13,7 @@ import {
   isRuntimeModeToggleVisible,
   type RuntimeMode,
 } from "../lib/runtimeMode";
+import { requestPiShutdown } from "../api/pistompWifi";
 import { Sheet } from "./Sheet";
 
 interface Props {
@@ -71,6 +72,9 @@ export function SettingsSheet({
   const [qaText, setQaText] = useState("");
   const [qaBusy, setQaBusy] = useState(false);
   const [qaCopied, setQaCopied] = useState(false);
+  const [shutdownBusy, setShutdownBusy] = useState(false);
+  const [shutdownError, setShutdownError] = useState<string | null>(null);
+  const [shutdownConfirm, setShutdownConfirm] = useState(false);
   const showRuntime = isRuntimeModeToggleVisible();
   const showHardware = isOnPiStompDevice() || runtimeMode === "pistomp";
 
@@ -91,9 +95,29 @@ export function SettingsSheet({
       setValue(host);
       setRuntime(runtimeMode);
       setAlsaControl(hardwareInput?.control ?? "");
+      setShutdownConfirm(false);
+      setShutdownError(null);
       if (mode === "live") void onRefreshHardwareInput();
     }
   }, [open, host, runtimeMode, hardwareInput?.control, mode, onRefreshHardwareInput]);
+
+  const onShutdown = async () => {
+    if (!shutdownConfirm) {
+      setShutdownConfirm(true);
+      setShutdownError(null);
+      return;
+    }
+    setShutdownBusy(true);
+    setShutdownError(null);
+    const result = await requestPiShutdown();
+    setShutdownBusy(false);
+    if (!result.ok) {
+      setShutdownError(result.error ?? "Shutdown failed");
+      setShutdownConfirm(false);
+      return;
+    }
+    setShutdownError(null);
+  };
 
   useEffect(() => {
     if (open && qaOpen) void refreshQa();
@@ -205,6 +229,35 @@ export function SettingsSheet({
                   {mode === "live"
                     ? "Hardware ALSA API not reachable — re-run install-on-pistomp.sh on the Pi."
                     : "Connect to the Pi to adjust hardware volume."}
+                </p>
+              )}
+            </div>
+
+            <div className="admin-subsection">
+              <span className="admin-subsection-label">System</span>
+              <p className="runtime-mode-hint">
+                Same as the Pi-Stomp LCD menu: powers the unit off cleanly.
+              </p>
+              <button
+                type="button"
+                className={`btn-danger ${shutdownConfirm ? "btn-danger-confirm" : ""}`}
+                disabled={shutdownBusy || !wifiAdminAvailable}
+                onClick={() => void onShutdown()}
+              >
+                {shutdownBusy
+                  ? "Shutting down…"
+                  : shutdownConfirm
+                    ? "Tap again to confirm shutdown"
+                    : "Shutdown Pi-Stomp"}
+              </button>
+              {!wifiAdminAvailable && (
+                <p className="runtime-mode-hint">
+                  System API not reachable — update/reinstall on the Pi so the WiFi API is running.
+                </p>
+              )}
+              {shutdownError && (
+                <p className="runtime-mode-hint" style={{ color: "var(--danger)" }}>
+                  {shutdownError}
                 </p>
               )}
             </div>

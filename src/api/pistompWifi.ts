@@ -77,3 +77,27 @@ export async function configureWifi(
 ): Promise<WifiResult> {
   return postWifi("/configure", { target, ssid, password });
 }
+
+/** Same as pi-stomp LCD “System shutdown” — poweroff via root wifi API service. */
+export async function requestPiShutdown(): Promise<{ ok: boolean; error?: string }> {
+  if (!isPiStompMode()) {
+    return { ok: false, error: "Shutdown is only available on Pi-Stomp" };
+  }
+  try {
+    const res = await fetch(apiUrl("/shutdown"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    const data = (await res.json()) as { ok?: boolean; error?: string };
+    if (!res.ok) {
+      return { ok: false, error: data.error ?? `HTTP ${res.status}` };
+    }
+    return { ok: data.ok !== false, error: data.error };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Network request failed",
+    };
+  }
+}
