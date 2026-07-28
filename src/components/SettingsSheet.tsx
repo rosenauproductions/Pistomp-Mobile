@@ -140,6 +140,32 @@ export function SettingsSheet({
           Version <strong>{getAppVersionLabel()}</strong>
         </p>
 
+        {(showHardware || onDevice) && (
+          <div className="runtime-mode-block">
+            <span className="admin-subsection-label">System</span>
+            <button
+              type="button"
+              className={`btn-danger ${shutdownConfirm ? "btn-danger-confirm" : ""}`}
+              disabled={shutdownBusy}
+              onClick={() => void onShutdown()}
+            >
+              {shutdownBusy
+                ? "Shutting down…"
+                : shutdownConfirm
+                  ? "Tap again to confirm shutdown"
+                  : "Shutdown Pi-Stomp"}
+            </button>
+            <p className="runtime-mode-hint">
+              Same as the Pi-Stomp LCD menu — powers the unit off. Tap twice to confirm.
+            </p>
+            {shutdownError && (
+              <p className="runtime-mode-hint" style={{ color: "var(--danger)" }}>
+                {shutdownError}
+              </p>
+            )}
+          </div>
+        )}
+
         <div className="runtime-mode-block">
           <span className="admin-subsection-label">Display</span>
           <div className="display-rotation-toggle" role="group" aria-label="Display mode">
@@ -229,35 +255,6 @@ export function SettingsSheet({
                   {mode === "live"
                     ? "Hardware ALSA API not reachable — re-run install-on-pistomp.sh on the Pi."
                     : "Connect to the Pi to adjust hardware volume."}
-                </p>
-              )}
-            </div>
-
-            <div className="admin-subsection">
-              <span className="admin-subsection-label">System</span>
-              <p className="runtime-mode-hint">
-                Same as the Pi-Stomp LCD menu: powers the unit off cleanly.
-              </p>
-              <button
-                type="button"
-                className={`btn-danger ${shutdownConfirm ? "btn-danger-confirm" : ""}`}
-                disabled={shutdownBusy || !wifiAdminAvailable}
-                onClick={() => void onShutdown()}
-              >
-                {shutdownBusy
-                  ? "Shutting down…"
-                  : shutdownConfirm
-                    ? "Tap again to confirm shutdown"
-                    : "Shutdown Pi-Stomp"}
-              </button>
-              {!wifiAdminAvailable && (
-                <p className="runtime-mode-hint">
-                  System API not reachable — update/reinstall on the Pi so the WiFi API is running.
-                </p>
-              )}
-              {shutdownError && (
-                <p className="runtime-mode-hint" style={{ color: "var(--danger)" }}>
-                  {shutdownError}
                 </p>
               )}
             </div>
