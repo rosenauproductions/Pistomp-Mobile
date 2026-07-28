@@ -12,6 +12,7 @@
 
 - **Snapshots:** Show all pedalboard snapshots in a horizontal scroll strip (was capped at A/B only)
 - **Effect grid:** Order pedals by MOD signal flow (`connections` + `x`/`y`), stable on every refresh
+- **Display:** Portrait / Landscape / 90° / −90° (landscape layout; in-slot pedal spin for ±90)
 - **Settings:** Toggle to hide effects with no MIDI assignment (bypassCC / port midiCC from MOD info; default off)
 
 Work in progress on `main` (target **1.2.1**). Stable **1.2.0** is tag `v1.2.0`; **1.1.0** remains on `v1.1.0` / `release/1.1.x` for hotfixes only.
