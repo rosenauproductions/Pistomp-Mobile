@@ -15,6 +15,11 @@ import {
   setDisplayRotation as persistDisplayRotation,
   type DisplayRotation,
 } from "./lib/displayRotation";
+import {
+  getHideUnassignedMidi,
+  setHideUnassignedMidi as persistHideUnassignedMidi,
+} from "./lib/adminPrefs";
+import { pluginHasMidiAssignment } from "./lib/midiAssignment";
 
 export default function App() {
   const stomp = useStomp();
@@ -24,11 +29,17 @@ export default function App() {
   const [displayRotation, setDisplayRotationState] = useState<DisplayRotation>(() =>
     getDisplayRotation(),
   );
+  const [hideUnassignedMidi, setHideUnassignedMidiState] = useState(() => getHideUnassignedMidi());
 
   const setDisplayRotation = (rotation: DisplayRotation) => {
     persistDisplayRotation(rotation);
     setDisplayRotationState(rotation);
     void lockDisplayOrientation(rotation);
+  };
+
+  const setHideUnassignedMidi = (hide: boolean) => {
+    persistHideUnassignedMidi(hide);
+    setHideUnassignedMidiState(hide);
   };
 
   useEffect(() => {
@@ -41,6 +52,11 @@ export default function App() {
 
   const effectPlugin =
     effectSettingsInstance != null ? stomp.getPlugin(effectSettingsInstance) ?? null : null;
+
+  const visiblePlugins = hideUnassignedMidi
+    ? stomp.board.plugins.filter(pluginHasMidiAssignment)
+    : stomp.board.plugins;
+  const visibleActiveCount = visiblePlugins.filter((p) => !p.bypassed).length;
 
   return (
     <div
@@ -114,12 +130,20 @@ export default function App() {
             <div className="strip">
               <span>Effects</span>
               <span>
-                <strong>{stomp.activeCount}</strong> active
+                <strong>{hideUnassignedMidi ? visibleActiveCount : stomp.activeCount}</strong> active
+                {hideUnassignedMidi ? ` · ${visiblePlugins.length} shown` : ""}
               </span>
             </div>
 
+            {hideUnassignedMidi && visiblePlugins.length === 0 && stomp.board.plugins.length > 0 && (
+              <p className="demo-save-hint" role="status">
+                No MIDI-assigned effects on this board (or MOD did not report CC mappings). Turn the
+                Settings filter off to show all effects.
+              </p>
+            )}
+
             <EffectGrid
-              plugins={stomp.board.plugins}
+              plugins={visiblePlugins}
               onToggle={(p) => void stomp.toggleBypass(p)}
               onOpenSettings={openEffectSettings}
             />
@@ -143,6 +167,8 @@ export default function App() {
           wifiAdminAvailable={stomp.wifiAdminAvailable}
           displayRotation={displayRotation}
           onDisplayRotationChange={setDisplayRotation}
+          hideUnassignedMidi={hideUnassignedMidi}
+          onHideUnassignedMidiChange={setHideUnassignedMidi}
           onRefreshWifi={stomp.refreshWifiStatus}
           onClose={() => setSettingsOpen(false)}
           onSave={stomp.saveHost}

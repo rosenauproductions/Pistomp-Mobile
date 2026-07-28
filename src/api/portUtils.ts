@@ -1,7 +1,7 @@
-import type { EffectPlugin, EffectPort } from "./types";
+import type { EffectPlugin, EffectPort, MidiCc } from "./types";
 
 type RangeMeta = { minimum?: number; maximum?: number };
-type PortLike = EffectPort & { ranges?: RangeMeta };
+type PortLike = EffectPort & { ranges?: RangeMeta; midiCC?: MidiCc };
 
 function readRange(raw: PortLike): { minimum?: number; maximum?: number } {
   const min = raw.minimum ?? raw.ranges?.minimum;
@@ -12,20 +12,37 @@ function readRange(raw: PortLike): { minimum?: number; maximum?: number } {
   return {};
 }
 
+function readMidiCc(raw: unknown): MidiCc | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const o = raw as Record<string, unknown>;
+  if (typeof o.channel !== "number" || typeof o.control !== "number") return undefined;
+  return {
+    channel: o.channel,
+    control: o.control,
+    ...(typeof o.hasRanges === "boolean" ? { hasRanges: o.hasRanges } : {}),
+    ...(typeof o.minimum === "number" ? { minimum: o.minimum } : {}),
+    ...(typeof o.maximum === "number" ? { maximum: o.maximum } : {}),
+  };
+}
+
 export function normalizeEffectPort(raw: PortLike): EffectPort {
   const { minimum, maximum } = readRange(raw);
+  const midiCC = readMidiCc(raw.midiCC);
   return {
     symbol: raw.symbol,
     value: Number(raw.value),
     valid: raw.valid,
     ...(minimum !== undefined ? { minimum } : {}),
     ...(maximum !== undefined ? { maximum } : {}),
+    ...(midiCC ? { midiCC } : {}),
   };
 }
 
 export function normalizePluginPorts(plugin: EffectPlugin): EffectPlugin {
+  const bypassCC = readMidiCc((plugin as EffectPlugin & { bypassCC?: unknown }).bypassCC);
   const normalized = {
     ...plugin,
+    ...(bypassCC ? { bypassCC } : {}),
     ports: plugin.ports.map((p) => normalizeEffectPort(p as PortLike)),
   };
   return { ...normalized, bypassed: deriveBypassedFromPlugin(normalized) };

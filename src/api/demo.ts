@@ -38,6 +38,7 @@ export const DEMO_BOARD: PedalboardInfo = {
       bypassed: false,
       x: demoX(1),
       y: 20,
+      bypassCC: { channel: 0, control: 60 },
       ports: [
         { symbol: "Threshold", value: 0.4, minimum: 0, maximum: 1 },
         { symbol: "Ratio", value: 0.6, minimum: 0, maximum: 1 },
@@ -50,6 +51,7 @@ export const DEMO_BOARD: PedalboardInfo = {
       bypassed: false,
       x: demoX(2),
       y: 20,
+      bypassCC: { channel: 0, control: 61 },
       ports: [{ symbol: "Drive", value: 0.5, minimum: 0, maximum: 1 }],
     },
     {
@@ -68,6 +70,7 @@ export const DEMO_BOARD: PedalboardInfo = {
       bypassed: false,
       x: demoX(4),
       y: 20,
+      bypassCC: { channel: 0, control: 62 },
       ports: [],
     },
     {

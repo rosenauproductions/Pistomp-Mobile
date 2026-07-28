@@ -24,6 +24,8 @@ interface Props {
   wifiAdminAvailable: boolean;
   displayRotation: DisplayRotation;
   onDisplayRotationChange: (rotation: DisplayRotation) => void;
+  hideUnassignedMidi: boolean;
+  onHideUnassignedMidiChange: (hide: boolean) => void;
   onRefreshWifi: () => Promise<WifiStatus | null>;
   onClose: () => void;
   onSave: (host: string) => void;
@@ -46,6 +48,8 @@ export function SettingsSheet({
   wifiAdminAvailable,
   displayRotation,
   onDisplayRotationChange,
+  hideUnassignedMidi,
+  onHideUnassignedMidiChange,
   onRefreshWifi,
   onClose,
   onSave,
@@ -137,6 +141,22 @@ export function SettingsSheet({
           <p className="runtime-mode-hint">
             Portrait: normal layout. Landscape: wide layout, no CSS rotate. 90° / −90°: pedals
             spin in their slots only. No reconnect needed.
+          </p>
+        </div>
+
+        <div className="runtime-mode-block">
+          <span className="admin-subsection-label">Effects</span>
+          <label className="admin-toggle-row">
+            <input
+              type="checkbox"
+              checked={hideUnassignedMidi}
+              onChange={(e) => onHideUnassignedMidiChange(e.target.checked)}
+            />
+            <span>Hide effects with no MIDI assignment</span>
+          </label>
+          <p className="runtime-mode-hint">
+            When on, only shows effects that have a MIDI controller mapped (bypass or parameter).
+            Default off — full board stays available.
           </p>
         </div>
 

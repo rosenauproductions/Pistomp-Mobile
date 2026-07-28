@@ -12,6 +12,16 @@ export interface EffectPort {
   valid?: boolean;
   minimum?: number;
   maximum?: number;
+  /** MIDI CC from MOD pedalboard info when the port is assigned. */
+  midiCC?: MidiCc;
+}
+
+export interface MidiCc {
+  channel: number;
+  control: number;
+  hasRanges?: boolean;
+  minimum?: number;
+  maximum?: number;
 }
 
 export interface EffectPlugin {
@@ -23,6 +33,8 @@ export interface EffectPlugin {
   bypassed: boolean;
   valid?: boolean;
   ports: EffectPort[];
+  /** Bypass MIDI CC from MOD pedalboard info when assigned. */
+  bypassCC?: MidiCc;
   /** MOD constructor position — used for signal-order tie-breaks. */
   x?: number;
   y?: number;
