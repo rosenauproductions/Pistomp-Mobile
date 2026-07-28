@@ -110,12 +110,13 @@ export function SettingsSheet({
     setShutdownBusy(true);
     setShutdownError(null);
     const result = await requestPiShutdown();
-    setShutdownBusy(false);
     if (!result.ok) {
+      setShutdownBusy(false);
       setShutdownError(result.error ?? "Shutdown failed");
       setShutdownConfirm(false);
       return;
     }
+    // Keep "Shutting down…" — the Pi should power off within a few seconds.
     setShutdownError(null);
   };
 

@@ -672,6 +672,36 @@ def disable_hotspot() -> tuple[bool, Optional[str]]:
     return apply_router_mode(router_name, persist=True)
 
 
+def schedule_system_poweroff() -> None:
+    """Same outcome as pi-stomp LCD System shutdown (systemctl poweroff).
+
+    Run detached so the HTTP worker / this service stopping cannot cancel it.
+    """
+    # Prefer systemd-run so poweroff is not tied to this service's cgroup.
+    attempts: list[list[str]] = [
+        ["systemd-run", "--on-active=1s", "/bin/systemctl", "--no-wall", "poweroff"],
+        ["systemd-run", "--on-active=1s", "/bin/systemctl", "--no-wall", "--force", "poweroff"],
+        ["systemctl", "--no-wall", "poweroff"],
+        ["systemctl", "--no-wall", "--force", "poweroff"],
+        ["/sbin/shutdown", "-h", "now"],
+        ["/sbin/poweroff", "-f"],
+    ]
+    for cmd in attempts:
+        try:
+            print(f"pistomp-wifi-api: poweroff attempt: {' '.join(cmd)}", flush=True)
+            proc = subprocess.run(cmd, capture_output=True, timeout=15, check=False)
+            if proc.returncode == 0:
+                print("pistomp-wifi-api: poweroff scheduled OK", flush=True)
+                return
+            err = (proc.stderr or proc.stdout or b"").decode("utf-8", "replace").strip()
+            print(f"pistomp-wifi-api: poweroff failed rc={proc.returncode}: {err}", flush=True)
+        except Exception as e:
+            print(f"pistomp-wifi-api: poweroff exception: {e}", flush=True)
+    # Last resort — mirrors modalapi/mod.py system_menu_shutdown
+    print("pistomp-wifi-api: falling back to os.system sudo poweroff", flush=True)
+    os.system("sudo systemctl --no-wall poweroff")
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
@@ -715,14 +745,10 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, {"ok": True, "message": "Shutting down"})
 
             def _poweroff() -> None:
-                time.sleep(0.75)
-                subprocess.run(
-                    ["systemctl", "--no-wall", "poweroff"],
-                    check=False,
-                    capture_output=True,
-                )
+                time.sleep(0.4)
+                schedule_system_poweroff()
 
-            threading.Thread(target=_poweroff, daemon=True).start()
+            threading.Thread(target=_poweroff, daemon=False).start()
             return
 
         body = self._read_json_body()
