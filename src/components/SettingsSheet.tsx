@@ -165,6 +165,34 @@ export function SettingsSheet({
           Version <strong>{getAppVersionLabel()}</strong>
         </p>
 
+        <div className="runtime-mode-block">
+          <span className="admin-subsection-label">Display</span>
+          <div className="display-rotation-toggle" role="group" aria-label="Display mode">
+            {(
+              [
+                { id: "portrait", label: "Portrait" },
+                { id: "landscape", label: "Landscape" },
+                { id: "90", label: "90°" },
+                { id: "-90", label: "−90°" },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                className={`runtime-mode-btn ${displayRotation === opt.id ? "active" : ""}`}
+                aria-pressed={displayRotation === opt.id}
+                onClick={() => onDisplayRotationChange(opt.id)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <p className="runtime-mode-hint">
+            Portrait: normal layout. Landscape: wide layout, no CSS rotate. 90° / −90°: pedals spin
+            in their slots only.
+          </p>
+        </div>
+
         {showHardware && (
           <div className="runtime-mode-block admin-block">
             <span className="admin-section-title">Admin</span>
@@ -328,32 +356,6 @@ export function SettingsSheet({
                     )}
                   </>
                 )}
-
-                <span className="admin-subsection-label">Display</span>
-                <div className="display-rotation-toggle" role="group" aria-label="Display mode">
-                  {(
-                    [
-                      { id: "portrait", label: "Portrait" },
-                      { id: "landscape", label: "Landscape" },
-                      { id: "90", label: "90°" },
-                      { id: "-90", label: "−90°" },
-                    ] as const
-                  ).map((opt) => (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      className={`runtime-mode-btn ${displayRotation === opt.id ? "active" : ""}`}
-                      aria-pressed={displayRotation === opt.id}
-                      onClick={() => onDisplayRotationChange(opt.id)}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-                <p className="runtime-mode-hint">
-                  Portrait: normal layout. Landscape: wide layout, no CSS rotate. 90° / −90°: pedals
-                  spin in their slots only.
-                </p>
 
                 <span className="admin-subsection-label">Effects</span>
                 <label className="admin-toggle-row">
