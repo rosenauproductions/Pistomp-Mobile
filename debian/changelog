@@ -1,3 +1,10 @@
+pistomp-mobile (1.2.1-1) unstable; urgency=medium
+
+  * Official 1.2.1 release: display modes, MIDI filter, shutdown, deep QA,
+    effect shown counts, nginx/deb packaging fixes.
+
+ -- Rosenau Productions <rosenauproductions@gmail.com>  Wed, 29 Jul 2026 08:52:00 -0500
+
 pistomp-mobile (1.2.1~dev-1) UNRELEASED; urgency=medium
 
   * Initial Debian packaging (dual path with shell install scripts).

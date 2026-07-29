@@ -56,7 +56,8 @@ export default function App() {
   const visiblePlugins = hideUnassignedMidi
     ? stomp.board.plugins.filter(pluginHasMidiAssignment)
     : stomp.board.plugins;
-  const visibleActiveCount = visiblePlugins.filter((p) => !p.bypassed).length;
+  const totalEffects = stomp.board.plugins.length;
+  const shownEffects = visiblePlugins.length;
 
   return (
     <div
@@ -130,8 +131,10 @@ export default function App() {
             <div className="strip">
               <span>Effects</span>
               <span>
-                <strong>{hideUnassignedMidi ? visibleActiveCount : stomp.activeCount}</strong> active
-                {hideUnassignedMidi ? ` · ${visiblePlugins.length} shown` : ""}
+                <strong>
+                  {shownEffects} of {totalEffects}
+                </strong>{" "}
+                shown
               </span>
             </div>
 

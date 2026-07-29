@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.2.1 (2026-07-29)
 
 ### Install
 
@@ -12,14 +12,14 @@
 
 - **Snapshots:** Show all pedalboard snapshots in a horizontal scroll strip (was capped at A/B only)
 - **Effect grid:** Order pedals by MOD signal flow (`connections` + `x`/`y`), stable on every refresh
+- **Effects strip:** Show `N of M shown` (visible vs total on the board)
 - **Display:** Portrait / Landscape / 90° / −90° (landscape layout; in-slot pedal spin for ±90)
 - **Settings:** Toggle to hide effects with no MIDI assignment (bypassCC / port midiCC from MOD info; default off)
-- **Settings:** Display, MIDI-hide, and Shutdown at top of Settings
-- **Settings:** Shutdown flow: confirm → Shutting down… → Safe to power off (trust API accept; match LCD)
+- **Settings:** Shutdown Pi-Stomp (confirm → Shutting down… → Safe to power off when the API accepts)
 - **QA:** Deep report — cache/bundle mismatch, shutdown dry-run, `/diagnostics` units + log, WebSocket, probes
-- **Fix:** Shutdown runs `systemctl` synchronously (background thread returned ok without powering off); dedicated poweroff/reboot oneshot units
+- **Fix:** Shutdown runs `systemctl` synchronously; dedicated poweroff/reboot oneshot units; reset button when Settings reopens
 
-Work in progress on `main` (target **1.2.1**). Stable **1.2.0** is tag `v1.2.0`; **1.1.0** remains on `v1.1.0` / `release/1.1.x` for hotfixes only.
+Verified on vanilla Pi-Stomp (git update workflow).
 
 ## 1.2.0 (2026-06-12)
 

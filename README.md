@@ -4,7 +4,7 @@ Lightweight, mobile-first web UI for [Pi-Stomp](https://github.com/TreeFallSound
 
 **Repository:** https://github.com/rosenauproductions/Pistomp-Mobile
 
-**v1.2.0** — Connect without reset, ALSA via pi-stomp, git install on the Pi. Verified on **vanilla** and **headless acoustic**. See [CHANGELOG.md](./CHANGELOG.md).
+**v1.2.1** — Display modes, MIDI filter, Settings shutdown, deeper QA, effect shown counts. Verified on **vanilla** Pi-Stomp. See [CHANGELOG.md](./CHANGELOG.md).
 
 Release notes: **[CHANGELOG.md](./CHANGELOG.md)**
 
