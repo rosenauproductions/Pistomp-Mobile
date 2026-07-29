@@ -225,7 +225,7 @@ export async function collectQaReport(ctx: QaContext): Promise<string> {
     "  • Shutdown dryRun must show unitLoaded:true. If missing, run update-pistomp-mobile.sh on the Pi.",
   );
   lines.push(
-    "  • Safe to power off in the app = HTTP to the Pi stopped responding (LCD uses white splash).",
+    "  • Safe to power off = API accepted shutdown (same moment the LCD shows shutdown). App does not wait for network drop.",
   );
   lines.push(
     "  • Mac + phone won't mirror each other unless BOTH receive MOD WebSocket updates.",

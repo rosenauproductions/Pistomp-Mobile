@@ -13,7 +13,7 @@ import {
   isRuntimeModeToggleVisible,
   type RuntimeMode,
 } from "../lib/runtimeMode";
-import { requestPiShutdown, waitForPiPoweroff } from "../api/pistompWifi";
+import { requestPiShutdown } from "../api/pistompWifi";
 import { Sheet } from "./Sheet";
 
 type ShutdownPhase = "idle" | "confirm" | "shutting-down" | "safe";
@@ -123,16 +123,8 @@ export function SettingsSheet({
       setShutdownError(result.error ?? "Shutdown failed");
       return;
     }
-    // API accepted — LCD equivalent of starting splash_show(False).
-    const wait = await waitForPiPoweroff();
-    if (wait.poweredOff) {
-      // HTTP gone ≈ LCD white “safe to unplug” splash.
-      setShutdownPhase("safe");
-      setShutdownError(null);
-      return;
-    }
-    setShutdownPhase("idle");
-    setShutdownError(wait.error ?? "Shutdown did not power off the Pi");
+    // API accepted the poweroff — trust it (LCD already shows shutdown). Don't wait for network drop.
+    setShutdownPhase("safe");
   };
 
   useEffect(() => {
@@ -207,6 +199,32 @@ export function SettingsSheet({
             When on, only shows effects that have a MIDI controller mapped. Default off.
           </p>
         </div>
+
+        {(showHardware || onDevice) && (
+          <div className="runtime-mode-block">
+            <span className="admin-subsection-label">System</span>
+            <button
+              type="button"
+              className={`btn-danger ${shutdownPhase === "confirm" ? "btn-danger-confirm" : ""} ${shutdownPhase === "safe" ? "btn-safe-poweroff" : ""}`}
+              disabled={shutdownPhase === "shutting-down" || shutdownPhase === "safe"}
+              onClick={() => void onShutdown()}
+            >
+              {shutdownLabel}
+            </button>
+            <p className="runtime-mode-hint">
+              {shutdownPhase === "safe"
+                ? "Shutdown started — same as the LCD. Unplug power when the screen is done."
+                : shutdownPhase === "shutting-down"
+                  ? "Asking the Pi to shut down…"
+                  : "Same as the Pi-Stomp LCD menu. Tap twice to confirm."}
+            </p>
+            {shutdownError && (
+              <p className="runtime-mode-hint" style={{ color: "var(--danger)" }}>
+                {shutdownError}
+              </p>
+            )}
+          </div>
+        )}
 
         {showHardware && (
           <div className="runtime-mode-block admin-block">
@@ -339,40 +357,6 @@ export function SettingsSheet({
           </button>
           {advancedOpen && (
             <>
-              <div className="runtime-mode-block advanced-wip-block">
-                <span className="admin-subsection-label">In progress</span>
-                <p className="runtime-mode-hint">
-                  Features still being hardened — use QA below if something misbehaves.
-                </p>
-
-                {(showHardware || onDevice) && (
-                  <>
-                    <button
-                      type="button"
-                      className={`btn-danger ${shutdownPhase === "confirm" ? "btn-danger-confirm" : ""} ${shutdownPhase === "safe" ? "btn-safe-poweroff" : ""}`}
-                      disabled={
-                        shutdownPhase === "shutting-down" || shutdownPhase === "safe"
-                      }
-                      onClick={() => void onShutdown()}
-                    >
-                      {shutdownLabel}
-                    </button>
-                    <p className="runtime-mode-hint">
-                      {shutdownPhase === "safe"
-                        ? "Pi stopped answering — same idea as the LCD white splash. Unplug power when ready."
-                        : shutdownPhase === "shutting-down"
-                          ? "Waiting for the Pi to drop off the network…"
-                          : "Same as the Pi-Stomp LCD menu. Tap twice to confirm."}
-                    </p>
-                    {shutdownError && (
-                      <p className="runtime-mode-hint" style={{ color: "var(--danger)" }}>
-                        {shutdownError}
-                      </p>
-                    )}
-                  </>
-                )}
-              </div>
-
               {onDevice && (
                 <label>
                   <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>Host URL (override)</span>

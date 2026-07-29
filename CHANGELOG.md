@@ -14,8 +14,8 @@
 - **Effect grid:** Order pedals by MOD signal flow (`connections` + `x`/`y`), stable on every refresh
 - **Display:** Portrait / Landscape / 90° / −90° (landscape layout; in-slot pedal spin for ±90)
 - **Settings:** Toggle to hide effects with no MIDI assignment (bypassCC / port midiCC from MOD info; default off)
-- **Settings:** Display and MIDI-hide at top of Settings; Shutdown under Advanced → In progress
-- **Settings:** Shutdown flow: confirm → Shutting down… → Safe to power off (client detects HTTP drop; LCD equivalent of white splash)
+- **Settings:** Display, MIDI-hide, and Shutdown at top of Settings
+- **Settings:** Shutdown flow: confirm → Shutting down… → Safe to power off (trust API accept; match LCD)
 - **QA:** Deep report — cache/bundle mismatch, shutdown dry-run, `/diagnostics` units + log, WebSocket, probes
 - **Fix:** Shutdown runs `systemctl` synchronously (background thread returned ok without powering off); dedicated poweroff/reboot oneshot units
 
