@@ -6,5 +6,6 @@ packaging/systemd/pistomp-audio-api.service /lib/systemd/system/
 packaging/systemd/pistomp-wifi-api.service /lib/systemd/system/
 packaging/systemd/pistomp-wifi-mode-apply.service /lib/systemd/system/
 packaging/systemd/pistomp-mobile-poweroff.service /lib/systemd/system/
+packaging/systemd/pistomp-mobile-reboot.service /lib/systemd/system/
 packaging/nginx/pistomp-mobile.conf /etc/nginx/sites-available/pistomp-mobile
 packaging/nginx/pistomp-mobile.conf /etc/nginx/pistomp-mobile-8080.conf

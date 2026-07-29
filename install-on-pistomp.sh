@@ -202,6 +202,8 @@ EOF
     /etc/systemd/system/pistomp-wifi-mode-apply.service
   install -m 644 "${PACKAGING}/systemd/pistomp-mobile-poweroff.service" \
     /etc/systemd/system/pistomp-mobile-poweroff.service
+  install -m 644 "${PACKAGING}/systemd/pistomp-mobile-reboot.service" \
+    /etc/systemd/system/pistomp-mobile-reboot.service
 
   mkdir -p /home/pistomp/data
   chmod 775 /home/pistomp/data 2>/dev/null || true

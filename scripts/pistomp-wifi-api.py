@@ -7,7 +7,6 @@ import os
 import shutil
 import subprocess
 import sys
-import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Optional
@@ -685,33 +684,38 @@ def _poweroff_log(msg: str) -> None:
         pass
 
 
-def schedule_system_poweroff() -> None:
-    """Same outcome as pi-stomp LCD System shutdown (systemctl poweroff).
+def schedule_system_action(action: str = "poweroff") -> None:
+    """Run systemctl poweroff/reboot like the pi-stomp LCD system menu.
 
-    Prefer a dedicated oneshot unit / double-fork so poweroff is not cancelled
-    when this wifi-api service is stopped as part of shutdown.
+    Invoked synchronously from the HTTP handler (systemctl --no-block returns
+    immediately). A background thread was unreliable on the Pi — POST returned
+    ok but the poweroff never started.
     """
-    _poweroff_log(f"schedule_system_poweroff uid={os.getuid()} pid={os.getpid()}")
+    if action not in ("poweroff", "reboot"):
+        raise ValueError(f"unsupported action: {action}")
+
+    unit = f"pistomp-mobile-{action}.service"
+    _poweroff_log(f"schedule_system_action action={action} uid={os.getuid()} pid={os.getpid()}")
 
     # 1) Dedicated oneshot unit (installed by install-on-pistomp / .deb)
     try:
         proc = subprocess.run(
-            ["systemctl", "start", "--no-block", "pistomp-mobile-poweroff.service"],
+            ["systemctl", "start", "--no-block", unit],
             capture_output=True,
             timeout=10,
             check=False,
         )
         err = (proc.stderr or proc.stdout or b"").decode("utf-8", "replace").strip()
-        _poweroff_log(f"systemctl start pistomp-mobile-poweroff rc={proc.returncode} {err}")
+        _poweroff_log(f"systemctl start {unit} rc={proc.returncode} {err}")
         if proc.returncode == 0:
             return
     except Exception as e:
-        _poweroff_log(f"systemctl start pistomp-mobile-poweroff exception: {e}")
+        _poweroff_log(f"systemctl start {unit} exception: {e}")
 
     # 2) systemd-run timer (survives this service stopping)
     for cmd in (
-        ["systemd-run", "--on-active=1s", "/bin/systemctl", "--no-wall", "poweroff"],
-        ["systemd-run", "--on-active=1s", "/bin/systemctl", "--no-wall", "--force", "poweroff"],
+        ["systemd-run", "--on-active=1s", "/bin/systemctl", "--no-wall", action],
+        ["systemd-run", "--on-active=1s", "/bin/systemctl", "--no-wall", "--force", action],
     ):
         try:
             proc = subprocess.run(cmd, capture_output=True, timeout=10, check=False)
@@ -722,44 +726,55 @@ def schedule_system_poweroff() -> None:
         except Exception as e:
             _poweroff_log(f"systemd-run exception: {e}")
 
-    # 3) Detached helper script or double-fork + LCD command
-    candidates = (
-        "/opt/pistomp-mobile/pistomp-poweroff.sh",
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), "pistomp-poweroff.sh"),
-    )
-    script = next((p for p in candidates if os.path.isfile(p)), None)
-    if script is not None:
-        try:
-            os.chmod(script, 0o755)
-        except OSError:
-            pass
-        _poweroff_log(f"spawning {script}")
-        subprocess.Popen(
-            ["nohup", "/bin/bash", script],
-            start_new_session=True,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            close_fds=True,
+    # 3) Detached helper / double-fork + LCD-style command
+    if action == "poweroff":
+        candidates = (
+            "/opt/pistomp-mobile/pistomp-poweroff.sh",
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "pistomp-poweroff.sh"),
         )
-        return
+        script = next((p for p in candidates if os.path.isfile(p)), None)
+        if script is not None:
+            try:
+                os.chmod(script, 0o755)
+            except OSError:
+                pass
+            _poweroff_log(f"spawning {script}")
+            subprocess.Popen(
+                ["nohup", "/bin/bash", script],
+                start_new_session=True,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                close_fds=True,
+            )
+            return
 
-    _poweroff_log("poweroff script missing — double-fork LCD fall-back")
+    _poweroff_log(f"{action} script/unit missing — double-fork LCD fall-back")
     try:
         if os.fork() != 0:
             return
         os.setsid()
         if os.fork() != 0:
             os._exit(0)
-        time.sleep(0.8)
-        # Exact LCD path (modalapi/mod.py system_menu_shutdown)
-        os.system("sudo systemctl --no-wall poweroff >>%s 2>&1" % POWEROFF_LOG)
-        os.system("systemctl --no-wall poweroff >>%s 2>&1" % POWEROFF_LOG)
-        os.system("/sbin/poweroff -f >>%s 2>&1" % POWEROFF_LOG)
+        time.sleep(0.5)
+        os.system(f"sudo systemctl --no-wall {action} >>{POWEROFF_LOG} 2>&1")
+        os.system(f"systemctl --no-wall {action} >>{POWEROFF_LOG} 2>&1")
+        if action == "poweroff":
+            os.system(f"/sbin/poweroff -f >>{POWEROFF_LOG} 2>&1")
+        else:
+            os.system(f"/sbin/reboot -f >>{POWEROFF_LOG} 2>&1")
         os._exit(0)
     except OSError as e:
         _poweroff_log(f"fork failed: {e}; inline os.system")
-        os.system("nohup sudo systemctl --no-wall poweroff >>%s 2>&1 &" % POWEROFF_LOG)
+        os.system(f"nohup sudo systemctl --no-wall {action} >>{POWEROFF_LOG} 2>&1 &")
+
+
+def schedule_system_poweroff() -> None:
+    schedule_system_action("poweroff")
+
+
+def schedule_system_reboot() -> None:
+    schedule_system_action("reboot")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -818,20 +833,28 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         path = urlparse(self.path).path.rstrip("/") or "/"
 
-        # Same action as pi-stomp LCD System shutdown: systemctl --no-wall poweroff
-        if path == "/shutdown":
-            self._json(200, {"ok": True, "message": "Shutting down"})
-
-            def _poweroff() -> None:
-                time.sleep(0.4)
-                schedule_system_poweroff()
-
-            threading.Thread(target=_poweroff, daemon=False).start()
-            return
-
+        # Drain body first (clients send JSON; unread body can break keep-alive).
         body = self._read_json_body()
         if body is None:
-            self._json(400, {"error": "invalid json"})
+            body = {}
+
+        # Same action as pi-stomp LCD System shutdown: systemctl --no-wall poweroff.
+        # Must run synchronously — a delayed thread returned HTTP 200 without
+        # ever starting poweroff on the device.
+        if path == "/shutdown":
+            try:
+                schedule_system_poweroff()
+                self._json(200, {"ok": True, "message": "Shutting down"})
+            except Exception as e:
+                self._json(500, {"ok": False, "error": str(e)})
+            return
+
+        if path == "/reboot":
+            try:
+                schedule_system_reboot()
+                self._json(200, {"ok": True, "message": "Rebooting"})
+            except Exception as e:
+                self._json(500, {"ok": False, "error": str(e)})
             return
 
         if path == "/configure":

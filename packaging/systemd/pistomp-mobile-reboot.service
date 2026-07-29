@@ -1,0 +1,11 @@
+[Unit]
+Description=Pistomp Mobile system reboot
+DefaultDependencies=no
+Conflicts=reboot.target
+Before=reboot.target
+
+[Service]
+Type=oneshot
+# Same style as LCD reboot — used for remote testing and Settings later.
+ExecStart=/bin/systemctl --no-wall reboot
+RemainAfterExit=no
