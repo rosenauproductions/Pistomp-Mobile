@@ -1,6 +1,6 @@
 import * as modui from "../api/modui";
 import type { EffectPlugin, PedalboardInfo } from "../api/types";
-import { getAppVersionLabel } from "./appVersion";
+import { getAppVersionLabel, getBuildId } from "./appVersion";
 import {
   getRuntimeMode,
   isModDesktopMode,
@@ -38,6 +38,135 @@ function formatPlugin(p: EffectPlugin, i: number): string[] {
   ];
 }
 
+function collectClientCacheLines(): string[] {
+  const lines: string[] = [];
+  if (typeof document === "undefined") {
+    lines.push("  (no document)");
+    return lines;
+  }
+
+  const scripts = [...document.querySelectorAll("script[src]")]
+    .map((el) => (el as HTMLScriptElement).src)
+    .filter(Boolean);
+  const styles = [...document.querySelectorAll('link[rel="stylesheet"]')]
+    .map((el) => (el as HTMLLinkElement).href)
+    .filter(Boolean);
+
+  lines.push(line("  Build id (compiled)", getBuildId()));
+  lines.push(line("  document.URL", document.URL));
+  lines.push(line("  location.href", window.location.href));
+  lines.push(
+    line(
+      "  JS bundles",
+      scripts.map((s) => s.split("/").pop()).join(", ") || "(none)",
+    ),
+  );
+  lines.push(
+    line(
+      "  CSS bundles",
+      styles.map((s) => s.split("/").pop()).join(", ") || "(none)",
+    ),
+  );
+  lines.push(line("  navigator.onLine", navigator.onLine));
+  const conn = (navigator as Navigator & { connection?: { effectiveType?: string } })
+    .connection;
+  lines.push(line("  network effectiveType", conn?.effectiveType ?? "(n/a)"));
+  lines.push(
+    line(
+      "  serviceWorker controller",
+      navigator.serviceWorker?.controller ? "active (may cache)" : "none",
+    ),
+  );
+  lines.push(
+    line(
+      "  Cache Storage API",
+      typeof caches !== "undefined" ? "available" : "unavailable",
+    ),
+  );
+  return lines;
+}
+
+async function collectCacheProbeLines(): Promise<string[]> {
+  const lines: string[] = ["--- Client / cache ---", ...collectClientCacheLines()];
+  try {
+    const res = await fetch(`/index.html?qa=${Date.now()}`, { cache: "no-store" });
+    const text = await res.text();
+    const assetMatch = text.match(/assets\/index-[^"'\\s]+/g) ?? [];
+    lines.push(line("  GET /index.html (no-store)", `HTTP ${res.status}`));
+    lines.push(
+      line(
+        "  Cache-Control",
+        res.headers.get("cache-control") ?? "(none)",
+      ),
+    );
+    lines.push(
+      line(
+        "  Assets in index.html",
+        assetMatch.join(", ") || "(none found)",
+      ),
+    );
+    const liveJs = collectClientCacheLines()
+      .find((l) => l.includes("JS bundles"))
+      ?.split(": ")[1];
+    const htmlJs = assetMatch.find((a) => a.endsWith(".js"))?.split("/").pop();
+    if (liveJs && htmlJs && !liveJs.includes(htmlJs)) {
+      lines.push(
+        `  ⚠ CACHE MISMATCH: page is running "${liveJs}" but index.html lists "${htmlJs}" — hard-refresh / clear site data.`,
+      );
+    } else if (htmlJs) {
+      lines.push(`  Bundle match check: ok (${htmlJs})`);
+    }
+  } catch (e) {
+    lines.push(`  GET /index.html → ERROR ${e instanceof Error ? e.message : String(e)}`);
+  }
+  return lines;
+}
+
+async function collectShutdownQaLines(): Promise<string[]> {
+  const lines: string[] = ["--- Shutdown / system API ---"];
+  if (!isPiStompMode()) {
+    lines.push("  (skipped — not Pi-Stomp runtime mode)");
+    return lines;
+  }
+
+  lines.push(await modui.fetchProbe("/pistomp/wifi/capabilities"));
+  lines.push(await modui.fetchProbe("/pistomp/wifi/diagnostics"));
+  lines.push(await modui.fetchProbe("/pistomp/wifi/poweroff-log"));
+
+  try {
+    const res = await fetch("/pistomp/wifi/shutdown", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dryRun: true }),
+      cache: "no-store",
+    });
+    const text = (await res.text()).trim();
+    lines.push(`  POST /pistomp/wifi/shutdown dryRun=true → HTTP ${res.status}`);
+    lines.push(`  ${text.slice(0, 1200)}`);
+  } catch (e) {
+    lines.push(
+      `  POST /pistomp/wifi/shutdown dryRun → ERROR ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+
+  try {
+    const res = await fetch("/pistomp/wifi/reboot", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dryRun: true }),
+      cache: "no-store",
+    });
+    const text = (await res.text()).trim();
+    lines.push(`  POST /pistomp/wifi/reboot dryRun=true → HTTP ${res.status} ${text.slice(0, 400)}`);
+  } catch (e) {
+    lines.push(
+      `  POST /pistomp/wifi/reboot dryRun → ERROR ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+
+  return lines;
+}
+
 export async function collectQaReport(ctx: QaContext): Promise<string> {
   const lines: string[] = [];
   const now = new Date().toISOString();
@@ -58,6 +187,11 @@ export async function collectQaReport(ctx: QaContext): Promise<string> {
   lines.push(line("Board title", ctx.board.title));
   lines.push(line("Plugin count", ctx.board.plugins.length));
   lines.push(line("Hardware ALSA API", ctx.hardwareInputAvailable ? "reachable" : "not reachable"));
+  lines.push("");
+
+  lines.push(...(await collectCacheProbeLines()));
+  lines.push("");
+  lines.push(...(await collectShutdownQaLines()));
   lines.push("");
 
   lines.push("--- Plugins (UI state) ---");
@@ -85,6 +219,15 @@ export async function collectQaReport(ctx: QaContext): Promise<string> {
 
   lines.push("--- Notes ---");
   lines.push(
+    "  • If Bundle match check fails, the phone is on a cached JS build — hard-refresh or clear site data.",
+  );
+  lines.push(
+    "  • Shutdown dryRun must show unitLoaded:true. If missing, run update-pistomp-mobile.sh on the Pi.",
+  );
+  lines.push(
+    "  • Safe to power off in the app = HTTP to the Pi stopped responding (LCD uses white splash).",
+  );
+  lines.push(
     "  • Mac + phone won't mirror each other unless BOTH receive MOD WebSocket updates.",
   );
   lines.push(
@@ -92,9 +235,6 @@ export async function collectQaReport(ctx: QaContext): Promise<string> {
   );
   lines.push(
     "  • QA probes do NOT call /reset/ (that endpoint clears all effects on the Pi).",
-  );
-  lines.push(
-    "  • Shutdown: Settings → System. If it does nothing, check /pistomp/wifi/capabilities (needs shutdown:true) and /tmp/pistomp-poweroff.log on the Pi.",
   );
   lines.push(
     "  • GATE on CollisionDrive is threshold (dB), not stomp; use BYPASS port for stomp in 0.2.2+.",

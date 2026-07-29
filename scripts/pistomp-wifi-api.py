@@ -674,6 +674,60 @@ def disable_hotspot() -> tuple[bool, Optional[str]]:
 POWEROFF_LOG = "/tmp/pistomp-poweroff.log"
 
 
+def unit_loaded(unit: str) -> bool:
+    try:
+        proc = subprocess.run(
+            ["systemctl", "cat", unit],
+            capture_output=True,
+            timeout=5,
+            check=False,
+        )
+        return proc.returncode == 0
+    except Exception:
+        return False
+
+
+def read_shutdown_diagnostics() -> dict:
+    """Read-only snapshot for Settings QA (no poweroff)."""
+    log_text = "(no log yet)"
+    try:
+        with open(POWEROFF_LOG, "r", encoding="utf-8") as f:
+            log_text = f.read()[-8000:]
+    except OSError:
+        pass
+
+    api_path = os.path.abspath(__file__)
+    try:
+        api_mtime = time.strftime(
+            "%Y-%m-%dT%H:%M:%S", time.localtime(os.path.getmtime(api_path))
+        )
+    except OSError:
+        api_mtime = "(unknown)"
+
+    poweroff_unit = "pistomp-mobile-poweroff.service"
+    reboot_unit = "pistomp-mobile-reboot.service"
+    return {
+        "ok": True,
+        "shutdown": True,
+        "reboot": True,
+        "shutdownLog": POWEROFF_LOG,
+        "uid": os.getuid(),
+        "pid": os.getpid(),
+        "apiPath": api_path,
+        "apiMtime": api_mtime,
+        "units": {
+            poweroff_unit: "loaded" if unit_loaded(poweroff_unit) else "missing",
+            reboot_unit: "loaded" if unit_loaded(reboot_unit) else "missing",
+        },
+        "poweroffScript": (
+            "present"
+            if os.path.isfile("/opt/pistomp-mobile/pistomp-poweroff.sh")
+            else "missing"
+        ),
+        "log": log_text,
+    }
+
+
 def _poweroff_log(msg: str) -> None:
     line = f"{time.strftime('%Y-%m-%dT%H:%M:%S')} {msg}"
     print(f"pistomp-wifi-api: {msg}", flush=True)
@@ -808,9 +862,14 @@ class Handler(BaseHTTPRequestHandler):
                 {
                     "ok": True,
                     "shutdown": True,
+                    "reboot": True,
                     "shutdownLog": POWEROFF_LOG,
+                    "dryRun": True,
                 },
             )
+            return
+        if path == "/diagnostics":
+            self._json(200, read_shutdown_diagnostics())
             return
         if path == "/poweroff-log":
             try:
@@ -842,6 +901,20 @@ class Handler(BaseHTTPRequestHandler):
         # Must run synchronously — a delayed thread returned HTTP 200 without
         # ever starting poweroff on the device.
         if path == "/shutdown":
+            if body.get("dryRun") is True:
+                unit = "pistomp-mobile-poweroff.service"
+                loaded = unit_loaded(unit)
+                self._json(
+                    200,
+                    {
+                        "ok": True,
+                        "dryRun": True,
+                        "wouldStart": unit,
+                        "unitLoaded": loaded,
+                        "diagnostics": read_shutdown_diagnostics(),
+                    },
+                )
+                return
             try:
                 schedule_system_poweroff()
                 self._json(200, {"ok": True, "message": "Shutting down"})
@@ -850,6 +923,19 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/reboot":
+            if body.get("dryRun") is True:
+                unit = "pistomp-mobile-reboot.service"
+                loaded = unit_loaded(unit)
+                self._json(
+                    200,
+                    {
+                        "ok": True,
+                        "dryRun": True,
+                        "wouldStart": unit,
+                        "unitLoaded": loaded,
+                    },
+                )
+                return
             try:
                 schedule_system_reboot()
                 self._json(200, {"ok": True, "message": "Rebooting"})

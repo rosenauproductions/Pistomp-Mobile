@@ -88,6 +88,7 @@ export async function requestPiShutdown(): Promise<{ ok: boolean; error?: string
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: "{}",
+      cache: "no-store",
     });
     const data = (await res.json()) as { ok?: boolean; error?: string; message?: string };
     if (res.status === 404) {
@@ -109,22 +110,32 @@ export async function requestPiShutdown(): Promise<{ ok: boolean; error?: string
   }
 }
 
-/** After POST /shutdown, poll until the Pi drops (success) or stays up (failure). */
+/**
+ * After POST /shutdown succeeds, poll until HTTP fails.
+ * That is our “safe to power off” signal — same idea as the LCD white splash
+ * (the web server is gone by then, so we infer from the client side).
+ */
 export async function waitForPiPoweroff(
-  timeoutMs = 12000,
+  timeoutMs = 20000,
 ): Promise<{ poweredOff: boolean; error?: string }> {
   const started = Date.now();
+  let consecutiveFails = 0;
   let sawReachable = false;
   while (Date.now() - started < timeoutMs) {
-    await new Promise((r) => setTimeout(r, 800));
+    await new Promise((r) => setTimeout(r, 700));
     try {
       const res = await fetch(apiUrl("/status"), { cache: "no-store" });
       if (res.ok) {
         sawReachable = true;
+        consecutiveFails = 0;
         continue;
       }
+      consecutiveFails += 1;
     } catch {
-      // Network error = likely powered off (or WiFi dropped mid-shutdown).
+      consecutiveFails += 1;
+    }
+    // Require two failures so a single flaky request doesn't flash "safe".
+    if (consecutiveFails >= 2) {
       return { poweredOff: true };
     }
   }
@@ -134,6 +145,6 @@ export async function waitForPiPoweroff(
   return {
     poweredOff: false,
     error:
-      "Pi is still running after shutdown request. Update on the Pi, then check QA → /pistomp/wifi/poweroff-log.",
+      "Pi is still responding after shutdown. Open Advanced → QA and copy the report (look for dryRun unitLoaded and poweroff log).",
   };
 }

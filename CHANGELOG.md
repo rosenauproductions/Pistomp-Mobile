@@ -14,9 +14,10 @@
 - **Effect grid:** Order pedals by MOD signal flow (`connections` + `x`/`y`), stable on every refresh
 - **Display:** Portrait / Landscape / 90° / −90° (landscape layout; in-slot pedal spin for ±90)
 - **Settings:** Toggle to hide effects with no MIDI assignment (bypassCC / port midiCC from MOD info; default off)
-- **Settings:** Shutdown Pi-Stomp (same `systemctl poweroff` as the LCD system menu; confirm tap)
-- **Fix:** Shutdown runs `systemctl` synchronously (background thread returned ok without powering off); dedicated poweroff/reboot oneshot units; UI verifies the Pi drops
-- **QA:** Probes `/pistomp/wifi/capabilities` and `/pistomp/wifi/poweroff-log`
+- **Settings:** Shutdown / Display / MIDI-hide moved under Advanced → In progress
+- **Settings:** Shutdown flow: confirm → Shutting down… → Safe to power off (client detects HTTP drop; LCD equivalent of white splash)
+- **QA:** Deep report — cache/bundle mismatch, shutdown dry-run, `/diagnostics` units + log, WebSocket, probes
+- **Fix:** Shutdown runs `systemctl` synchronously (background thread returned ok without powering off); dedicated poweroff/reboot oneshot units
 
 Work in progress on `main` (target **1.2.1**). Stable **1.2.0** is tag `v1.2.0`; **1.1.0** remains on `v1.1.0` / `release/1.1.x` for hotfixes only.
 

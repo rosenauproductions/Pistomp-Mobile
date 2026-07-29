@@ -429,7 +429,7 @@ export function formatWsParamLine(instance: string, port: string, value: number)
   return wsParamMessage(instance, port, value);
 }
 
-async function fetchProbe(path: string, init?: RequestInit): Promise<string> {
+export async function fetchProbe(path: string, init?: RequestInit): Promise<string> {
   try {
     const res = await fetch(apiUrl(path), { ...init, signal: AbortSignal.timeout(5000) });
     const text = (await res.text()).trim().replace(/\s+/g, " ").slice(0, 160);
@@ -481,7 +481,7 @@ export async function runConnectionProbes(
   lines.push(await fetchProbe("/pistomp/audio/controls"));
   lines.push(await fetchProbe("/pistomp/wifi/status"));
   lines.push(await fetchProbe("/pistomp/wifi/capabilities"));
-  lines.push(await fetchProbe("/pistomp/wifi/poweroff-log"));
+  // diagnostics + poweroff-log covered in collectShutdownQaLines (deep QA)
 
   if (!plugin) {
     lines.push("  (no plugin — load a pedalboard first)");

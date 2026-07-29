@@ -16,6 +16,8 @@ import {
 import { requestPiShutdown, waitForPiPoweroff } from "../api/pistompWifi";
 import { Sheet } from "./Sheet";
 
+type ShutdownPhase = "idle" | "confirm" | "shutting-down" | "safe";
+
 interface Props {
   open: boolean;
   host: string;
@@ -72,9 +74,8 @@ export function SettingsSheet({
   const [qaText, setQaText] = useState("");
   const [qaBusy, setQaBusy] = useState(false);
   const [qaCopied, setQaCopied] = useState(false);
-  const [shutdownBusy, setShutdownBusy] = useState(false);
+  const [shutdownPhase, setShutdownPhase] = useState<ShutdownPhase>("idle");
   const [shutdownError, setShutdownError] = useState<string | null>(null);
-  const [shutdownConfirm, setShutdownConfirm] = useState(false);
   const showRuntime = isRuntimeModeToggleVisible();
   const showHardware = isOnPiStompDevice() || runtimeMode === "pistomp";
 
@@ -91,39 +92,46 @@ export function SettingsSheet({
   }, [onCollectQa]);
 
   useEffect(() => {
-    if (open) {
-      setValue(host);
-      setRuntime(runtimeMode);
-      setAlsaControl(hardwareInput?.control ?? "");
-      setShutdownConfirm(false);
-      setShutdownError(null);
-      if (mode === "live") void onRefreshHardwareInput();
-    }
+    if (!open) return;
+    setValue(host);
+    setRuntime(runtimeMode);
+    setAlsaControl(hardwareInput?.control ?? "");
+    if (mode === "live") void onRefreshHardwareInput();
   }, [open, host, runtimeMode, hardwareInput?.control, mode, onRefreshHardwareInput]);
 
+  // Reset confirm state when opening Settings (keep mid-shutdown / safe states).
+  useEffect(() => {
+    if (!open) return;
+    setShutdownPhase((phase) =>
+      phase === "safe" || phase === "shutting-down" ? phase : "idle",
+    );
+    setShutdownError(null);
+  }, [open]);
+
   const onShutdown = async () => {
-    if (!shutdownConfirm) {
-      setShutdownConfirm(true);
+    if (shutdownPhase === "safe" || shutdownPhase === "shutting-down") return;
+    if (shutdownPhase !== "confirm") {
+      setShutdownPhase("confirm");
       setShutdownError(null);
       return;
     }
-    setShutdownBusy(true);
+    setShutdownPhase("shutting-down");
     setShutdownError(null);
     const result = await requestPiShutdown();
     if (!result.ok) {
-      setShutdownBusy(false);
+      setShutdownPhase("idle");
       setShutdownError(result.error ?? "Shutdown failed");
-      setShutdownConfirm(false);
       return;
     }
+    // API accepted — LCD equivalent of starting splash_show(False).
     const wait = await waitForPiPoweroff();
     if (wait.poweredOff) {
-      // Keep "Shutting down…" — connection is gone.
+      // HTTP gone ≈ LCD white “safe to unplug” splash.
+      setShutdownPhase("safe");
       setShutdownError(null);
       return;
     }
-    setShutdownBusy(false);
-    setShutdownConfirm(false);
+    setShutdownPhase("idle");
     setShutdownError(wait.error ?? "Shutdown did not power off the Pi");
   };
 
@@ -141,82 +149,21 @@ export function SettingsSheet({
     }
   };
 
+  const shutdownLabel =
+    shutdownPhase === "safe"
+      ? "Safe to power off"
+      : shutdownPhase === "shutting-down"
+        ? "Shutting down…"
+        : shutdownPhase === "confirm"
+          ? "Tap again to confirm shutdown"
+          : "Shutdown Pi-Stomp";
+
   return (
     <Sheet title="Settings" open={open} onClose={onClose}>
       <div className="settings-form">
         <p className="settings-version">
           Version <strong>{getAppVersionLabel()}</strong>
         </p>
-
-        {(showHardware || onDevice) && (
-          <div className="runtime-mode-block">
-            <span className="admin-subsection-label">System</span>
-            <button
-              type="button"
-              className={`btn-danger ${shutdownConfirm ? "btn-danger-confirm" : ""}`}
-              disabled={shutdownBusy}
-              onClick={() => void onShutdown()}
-            >
-              {shutdownBusy
-                ? "Shutting down…"
-                : shutdownConfirm
-                  ? "Tap again to confirm shutdown"
-                  : "Shutdown Pi-Stomp"}
-            </button>
-            <p className="runtime-mode-hint">
-              Same as the Pi-Stomp LCD menu — powers the unit off. Tap twice to confirm.
-            </p>
-            {shutdownError && (
-              <p className="runtime-mode-hint" style={{ color: "var(--danger)" }}>
-                {shutdownError}
-              </p>
-            )}
-          </div>
-        )}
-
-        <div className="runtime-mode-block">
-          <span className="admin-subsection-label">Display</span>
-          <div className="display-rotation-toggle" role="group" aria-label="Display mode">
-            {(
-              [
-                { id: "portrait", label: "Portrait" },
-                { id: "landscape", label: "Landscape" },
-                { id: "90", label: "90°" },
-                { id: "-90", label: "−90°" },
-              ] as const
-            ).map((opt) => (
-              <button
-                key={opt.id}
-                type="button"
-                className={`runtime-mode-btn ${displayRotation === opt.id ? "active" : ""}`}
-                aria-pressed={displayRotation === opt.id}
-                onClick={() => onDisplayRotationChange(opt.id)}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-          <p className="runtime-mode-hint">
-            Portrait: normal layout. Landscape: wide layout, no CSS rotate. 90° / −90°: pedals
-            spin in their slots only. No reconnect needed.
-          </p>
-        </div>
-
-        <div className="runtime-mode-block">
-          <span className="admin-subsection-label">Effects</span>
-          <label className="admin-toggle-row">
-            <input
-              type="checkbox"
-              checked={hideUnassignedMidi}
-              onChange={(e) => onHideUnassignedMidiChange(e.target.checked)}
-            />
-            <span>Hide effects with no MIDI assignment</span>
-          </label>
-          <p className="runtime-mode-hint">
-            When on, only shows effects that have a MIDI controller mapped (bypass or parameter).
-            Default off — full board stays available.
-          </p>
-        </div>
 
         {showHardware && (
           <div className="runtime-mode-block admin-block">
@@ -349,6 +296,79 @@ export function SettingsSheet({
           </button>
           {advancedOpen && (
             <>
+              <div className="runtime-mode-block advanced-wip-block">
+                <span className="admin-subsection-label">In progress</span>
+                <p className="runtime-mode-hint">
+                  Features still being hardened — use QA below if something misbehaves.
+                </p>
+
+                {(showHardware || onDevice) && (
+                  <>
+                    <button
+                      type="button"
+                      className={`btn-danger ${shutdownPhase === "confirm" ? "btn-danger-confirm" : ""} ${shutdownPhase === "safe" ? "btn-safe-poweroff" : ""}`}
+                      disabled={
+                        shutdownPhase === "shutting-down" || shutdownPhase === "safe"
+                      }
+                      onClick={() => void onShutdown()}
+                    >
+                      {shutdownLabel}
+                    </button>
+                    <p className="runtime-mode-hint">
+                      {shutdownPhase === "safe"
+                        ? "Pi stopped answering — same idea as the LCD white splash. Unplug power when ready."
+                        : shutdownPhase === "shutting-down"
+                          ? "Waiting for the Pi to drop off the network…"
+                          : "Same as the Pi-Stomp LCD menu. Tap twice to confirm."}
+                    </p>
+                    {shutdownError && (
+                      <p className="runtime-mode-hint" style={{ color: "var(--danger)" }}>
+                        {shutdownError}
+                      </p>
+                    )}
+                  </>
+                )}
+
+                <span className="admin-subsection-label">Display</span>
+                <div className="display-rotation-toggle" role="group" aria-label="Display mode">
+                  {(
+                    [
+                      { id: "portrait", label: "Portrait" },
+                      { id: "landscape", label: "Landscape" },
+                      { id: "90", label: "90°" },
+                      { id: "-90", label: "−90°" },
+                    ] as const
+                  ).map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      className={`runtime-mode-btn ${displayRotation === opt.id ? "active" : ""}`}
+                      aria-pressed={displayRotation === opt.id}
+                      onClick={() => onDisplayRotationChange(opt.id)}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="runtime-mode-hint">
+                  Portrait: normal layout. Landscape: wide layout, no CSS rotate. 90° / −90°: pedals
+                  spin in their slots only.
+                </p>
+
+                <span className="admin-subsection-label">Effects</span>
+                <label className="admin-toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={hideUnassignedMidi}
+                    onChange={(e) => onHideUnassignedMidiChange(e.target.checked)}
+                  />
+                  <span>Hide effects with no MIDI assignment</span>
+                </label>
+                <p className="runtime-mode-hint">
+                  When on, only shows effects that have a MIDI controller mapped. Default off.
+                </p>
+              </div>
+
               {onDevice && (
                 <label>
                   <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>Host URL (override)</span>
@@ -371,6 +391,12 @@ export function SettingsSheet({
                   Reload current pedalboard into MOD (reset)
                 </button>
               )}
+
+              <span className="admin-subsection-label">Diagnostics (QA)</span>
+              <p className="runtime-mode-hint">
+                Deep report for support: cache/bundle mismatch, shutdown dry-run (safe), units,
+                poweroff log, WebSocket, and live probes. Copy and paste the whole report.
+              </p>
               <button
                 type="button"
                 className="btn-ghost qa-toggle-btn"
@@ -381,16 +407,11 @@ export function SettingsSheet({
               </button>
               {qaOpen && (
                 <>
-                  <p className="runtime-mode-hint">
-                    Tap a stomp or slider first, then Refresh — the log captures what the app tried.
-                    Probes are read-only (they do not call <code>/reset/</code>, which would delete all
-                    effects on the Pi).
-                  </p>
                   <textarea
                     className="qa-textarea"
                     readOnly
-                    value={qaBusy ? "Running probes…" : qaText}
-                    rows={14}
+                    value={qaBusy ? "Running deep probes…" : qaText}
+                    rows={22}
                     aria-label="QA diagnostic report"
                   />
                   <div className="qa-actions">
