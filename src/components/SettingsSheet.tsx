@@ -99,12 +99,11 @@ export function SettingsSheet({
     if (mode === "live") void onRefreshHardwareInput();
   }, [open, host, runtimeMode, hardwareInput?.control, mode, onRefreshHardwareInput]);
 
-  // Reset confirm state when opening Settings (keep mid-shutdown / safe states).
+  // Always reset when opening Settings so a prior "Safe to power off" does not stick
+  // after the Pi reboots / the page is refreshed and Settings is opened again.
   useEffect(() => {
     if (!open) return;
-    setShutdownPhase((phase) =>
-      phase === "safe" || phase === "shutting-down" ? phase : "idle",
-    );
+    setShutdownPhase("idle");
     setShutdownError(null);
   }, [open]);
 
