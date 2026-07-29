@@ -193,6 +193,21 @@ export function SettingsSheet({
           </p>
         </div>
 
+        <div className="runtime-mode-block">
+          <span className="admin-subsection-label">Effects</span>
+          <label className="admin-toggle-row">
+            <input
+              type="checkbox"
+              checked={hideUnassignedMidi}
+              onChange={(e) => onHideUnassignedMidiChange(e.target.checked)}
+            />
+            <span>Hide effects with no MIDI assignment</span>
+          </label>
+          <p className="runtime-mode-hint">
+            When on, only shows effects that have a MIDI controller mapped. Default off.
+          </p>
+        </div>
+
         {showHardware && (
           <div className="runtime-mode-block admin-block">
             <span className="admin-section-title">Admin</span>
@@ -356,19 +371,6 @@ export function SettingsSheet({
                     )}
                   </>
                 )}
-
-                <span className="admin-subsection-label">Effects</span>
-                <label className="admin-toggle-row">
-                  <input
-                    type="checkbox"
-                    checked={hideUnassignedMidi}
-                    onChange={(e) => onHideUnassignedMidiChange(e.target.checked)}
-                  />
-                  <span>Hide effects with no MIDI assignment</span>
-                </label>
-                <p className="runtime-mode-hint">
-                  When on, only shows effects that have a MIDI controller mapped. Default off.
-                </p>
               </div>
 
               {onDevice && (
