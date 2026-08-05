@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PiStomp HDR logo test</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0d0f12;
+        --panel: #1e242d;
+        --ink: #e8eef2;
+        --muted: #9aa7b5;
+        --accent: #3dd68c;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Avenir Next", "Segoe UI", sans-serif;
+        background: radial-gradient(circle at top, #182029, var(--bg) 55%);
+        color: var(--ink);
+        padding: 32px 20px 48px;
+      }
+      main {
+        max-width: 820px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 1.6rem;
+        margin: 0 0 8px;
+        letter-spacing: -0.02em;
+      }
+      p {
+        margin: 0 0 20px;
+        color: var(--muted);
+        line-height: 1.45;
+        max-width: 62ch;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 18px;
+      }
+      figure {
+        margin: 0;
+        background: var(--panel);
+        border: 1px solid #2b3440;
+        border-radius: 18px;
+        padding: 16px;
+      }
+      figure.pick {
+        border-color: var(--accent);
+      }
+      figure img {
+        display: block;
+        width: 100%;
+        aspect-ratio: 1;
+        object-fit: contain;
+        background: #000;
+        border-radius: 12px;
+      }
+      figcaption {
+        margin-top: 12px;
+        font-size: 0.92rem;
+      }
+      figcaption strong {
+        display: block;
+        color: var(--accent);
+        margin-bottom: 4px;
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.85em;
+        color: #c9d4df;
+      }
+      .tip {
+        margin-top: 22px;
+        padding: 14px 16px;
+        border-left: 3px solid var(--accent);
+        background: rgba(61, 214, 140, 0.08);
+        border-radius: 0 12px 12px 0;
+        color: var(--ink);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>PiStomp Mobile — HDR logo</h1>
+      <p>
+        Keeper is the brand-color BT.2100 PQ JPEG. Open in Chrome on an XDR/EDR
+        Mac — the green should look brighter than normal SDR white on the page.
+      </p>
+      <div class="grid">
+        <figure>
+          <img src="pistomp-icon-sdr.png" alt="SDR icon" />
+          <figcaption>
+            <strong>SDR baseline</strong>
+            Normal PNG for comparison.
+          </figcaption>
+        </figure>
+        <figure class="pick">
+          <img src="pistomp-icon-hdr.jpg" alt="HDR brand-color icon" />
+          <figcaption>
+            <strong>Keeper — HDR brand colors</strong>
+            <code>pistomp-icon-hdr.jpg</code> — BT.2100 PQ, mint green preserved and boosted.
+          </figcaption>
+        </figure>
+      </div>
+      <div class="tip">
+        File to use: <code>docs/hdr-logo-test/pistomp-icon-hdr.jpg</code>.
+        Capture with Cmd-Shift-5 → Options → Capture Format → HDR if you want the glow in a screenshot.
+      </div>
+    </main>
+  </body>
+</html>
