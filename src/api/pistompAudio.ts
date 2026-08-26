@@ -77,6 +77,38 @@ export async function setAlsaValue(control: string, value: number): Promise<bool
   }
 }
 
+export async function fetchVuPeaks(): Promise<{
+  available: boolean;
+  inL: number;
+  inR: number;
+  outL: number;
+  outR: number;
+  error?: string;
+} | null> {
+  try {
+    const res = await fetch(apiUrl("/peaks"), { cache: "no-store" });
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      available?: boolean;
+      inL?: number;
+      inR?: number;
+      outL?: number;
+      outR?: number;
+      error?: string;
+    };
+    return {
+      available: Boolean(data.available),
+      inL: typeof data.inL === "number" ? data.inL : 0,
+      inR: typeof data.inR === "number" ? data.inR : 0,
+      outL: typeof data.outL === "number" ? data.outL : 0,
+      outR: typeof data.outR === "number" ? data.outR : 0,
+      error: data.error,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function loadHardwareInputState(
   preferredControl?: string | null,
 ): Promise<HardwareInputState | null> {

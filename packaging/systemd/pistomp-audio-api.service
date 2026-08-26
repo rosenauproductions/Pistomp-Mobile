@@ -1,12 +1,14 @@
 [Unit]
-Description=Pistomp Mobile ALSA API
-After=network.target sound.target
+Description=Pistomp Mobile ALSA + VU peaks API
+After=network.target sound.target jack.service
+Wants=jack.service
 
 [Service]
 Type=simple
 User=pistomp
 Group=pistomp
 Environment=PI_STOMP_HOME=/home/pistomp/pi-stomp
+Environment=JACK_PROMISCUOUS_SERVER=jack
 ExecStart=/usr/bin/python3 /opt/pistomp-mobile/pistomp-audio-api.py
 Restart=on-failure
 RestartSec=2

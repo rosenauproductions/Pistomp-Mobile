@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { fetchVuPeaks } from "../api/pistompAudio";
+import { isPiStompMode } from "../lib/runtimeMode";
 
 /** Normalized 0–1 peak levels for the four hardware channels. */
 export interface VuLevels {
@@ -12,9 +14,17 @@ function clamp01(n: number): number {
   return Math.min(1, Math.max(0, n));
 }
 
+function demoTick(t: number): VuLevels {
+  return {
+    inL: clamp01(0.35 + 0.45 * Math.abs(Math.sin(t * 2.1)) + 0.12 * Math.sin(t * 11.3)),
+    inR: clamp01(0.32 + 0.48 * Math.abs(Math.sin(t * 2.1 + 0.4)) + 0.1 * Math.sin(t * 9.7)),
+    outL: clamp01(0.28 + 0.5 * Math.abs(Math.sin(t * 1.7 + 0.2)) + 0.15 * Math.sin(t * 7.1)),
+    outR: clamp01(0.3 + 0.47 * Math.abs(Math.sin(t * 1.7 + 0.55)) + 0.12 * Math.sin(t * 8.4)),
+  };
+}
+
 /**
- * Phase 1: demo signal with VU-ish ballistics (fast attack, slow release).
- * Phase 2: swap body to poll `/pistomp/audio/peaks` and keep the same return shape.
+ * Live peaks from `/pistomp/audio/peaks` on Pi-Stomp; demo ballistics elsewhere / if offline.
  */
 export function useVuLevels(active: boolean): VuLevels {
   const [levels, setLevels] = useState<VuLevels>({
@@ -30,39 +40,71 @@ export function useVuLevels(active: boolean): VuLevels {
       return;
     }
 
+    const preferLive = isPiStompMode();
+    let cancelled = false;
     let raf = 0;
+    let pollTimer = 0;
     let last = performance.now();
     const held = { inL: 0, inR: 0, outL: 0, outR: 0 };
     const t0 = performance.now();
+    let liveOk = false;
 
-    const tick = (now: number) => {
-      const dt = Math.min(0.05, (now - last) / 1000);
-      last = now;
-      const t = (now - t0) / 1000;
-
-      // Independent-ish demo sources (pseudo program material)
-      const raw = {
-        inL: clamp01(0.35 + 0.45 * Math.abs(Math.sin(t * 2.1)) + 0.12 * Math.sin(t * 11.3)),
-        inR: clamp01(0.32 + 0.48 * Math.abs(Math.sin(t * 2.1 + 0.4)) + 0.1 * Math.sin(t * 9.7)),
-        outL: clamp01(0.28 + 0.5 * Math.abs(Math.sin(t * 1.7 + 0.2)) + 0.15 * Math.sin(t * 7.1)),
-        outR: clamp01(0.3 + 0.47 * Math.abs(Math.sin(t * 1.7 + 0.55)) + 0.12 * Math.sin(t * 8.4)),
-      };
-
+    const applyBallistics = (raw: VuLevels, dt: number) => {
       const attack = 1 - Math.exp(-dt * 28);
       const release = 1 - Math.exp(-dt * 3.2);
-
       (Object.keys(held) as (keyof VuLevels)[]).forEach((k) => {
         const target = raw[k];
         const coeff = target > held[k] ? attack : release;
         held[k] += (target - held[k]) * coeff;
       });
-
       setLevels({ ...held });
-      raf = requestAnimationFrame(tick);
     };
 
+    const pollLive = async () => {
+      const peaks = await fetchVuPeaks();
+      if (cancelled) return;
+      if (peaks?.available) {
+        liveOk = true;
+        const now = performance.now();
+        const dt = Math.min(0.08, (now - last) / 1000);
+        last = now;
+        applyBallistics(
+          {
+            inL: clamp01(peaks.inL),
+            inR: clamp01(peaks.inR),
+            outL: clamp01(peaks.outL),
+            outR: clamp01(peaks.outR),
+          },
+          dt,
+        );
+      } else {
+        liveOk = false;
+      }
+    };
+
+    if (preferLive) {
+      void pollLive();
+      pollTimer = window.setInterval(() => void pollLive(), 50);
+    }
+
+    const tick = (now: number) => {
+      if (cancelled) return;
+      // Demo only when not successfully live (desktop / API down)
+      if (!preferLive || !liveOk) {
+        const dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        const t = (now - t0) / 1000;
+        applyBallistics(demoTick(t), dt);
+      }
+      raf = requestAnimationFrame(tick);
+    };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      if (pollTimer) window.clearInterval(pollTimer);
+    };
   }, [active]);
 
   return levels;

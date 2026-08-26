@@ -17,6 +17,17 @@ PI_STOMP_HOME = os.environ.get("PI_STOMP_HOME", "/home/pistomp/pi-stomp")
 # Same path pi-stomp audiocard.py uses (not a Pistomp-Mobile–specific file).
 ASOUND_STATE = "/var/lib/alsa/asound.state"
 
+# Allow importing jack_vu_meter.py from the same install dir (/opt/pistomp-mobile).
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if _SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPT_DIR)
+
+try:
+    from jack_vu_meter import get_shared_meter
+except Exception as _vu_exc:  # pragma: no cover
+    get_shared_meter = None  # type: ignore
+    sys.stderr.write(f"pistomp-audio-api: jack vu unavailable ({_vu_exc})\n")
+
 DEFAULT_CONTROLS = [
     ("Aux", "Input gain"),
     ("Headphone", "Output volume"),
@@ -210,6 +221,36 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/controls":
             self._json(200, {"card": CARD, "controls": list_controls()})
             return
+        if path == "/peaks":
+            if get_shared_meter is None:
+                self._json(
+                    200,
+                    {
+                        "available": False,
+                        "error": "jack vu module missing",
+                        "inL": 0,
+                        "inR": 0,
+                        "outL": 0,
+                        "outR": 0,
+                    },
+                )
+                return
+            try:
+                meter = get_shared_meter()
+                self._json(200, meter.snapshot())
+            except Exception as exc:
+                self._json(
+                    200,
+                    {
+                        "available": False,
+                        "error": str(exc),
+                        "inL": 0,
+                        "inR": 0,
+                        "outL": 0,
+                        "outR": 0,
+                    },
+                )
+            return
         if path == "/value":
             qs = parse_qs(urlparse(self.path).query)
             name = (qs.get("control") or qs.get("name") or [None])[0]
@@ -264,6 +305,11 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
+    if get_shared_meter is not None:
+        try:
+            get_shared_meter()  # start JACK tap early (non-fatal if JACK down)
+        except Exception as exc:
+            sys.stderr.write(f"pistomp-audio-api: jack vu start deferred ({exc})\n")
     server = HTTPServer((HOST, PORT), Handler)
     print(f"pistomp-audio-api listening on http://{HOST}:{PORT}", flush=True)
     server.serve_forever()

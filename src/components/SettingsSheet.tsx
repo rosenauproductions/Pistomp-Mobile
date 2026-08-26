@@ -247,8 +247,8 @@ export function SettingsSheet({
                 ))}
               </div>
               <p className="runtime-mode-hint">
-                Inputs / Outputs: stereo L+R. Summed: one meter for combined input, one for combined
-                output. Levels are demo until live peaks are wired.
+                Inputs / Outputs: stereo L+R. Summed: combined input + combined output. On the Pi,
+                meters tap JACK capture / mod-monitor (live). Elsewhere: demo motion.
               </p>
             </>
           )}

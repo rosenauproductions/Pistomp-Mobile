@@ -70,7 +70,8 @@ try_deb_install() {
     && command -v dpkg-deb >/dev/null 2>&1; then
     if [[ "${SCRIPT_DIR}/dist/index.html" -nt "${deb}" ]] \
       || [[ "${SCRIPT_DIR}/scripts/pistomp-wifi-api.py" -nt "${deb}" ]] \
-      || [[ "${SCRIPT_DIR}/scripts/pistomp-audio-api.py" -nt "${deb}" ]]; then
+      || [[ "${SCRIPT_DIR}/scripts/pistomp-audio-api.py" -nt "${deb}" ]] \
+      || [[ "${SCRIPT_DIR}/scripts/jack_vu_meter.py" -nt "${deb}" ]]; then
       echo "Source newer than $(basename "${deb}") — rebuilding .deb..."
       bash "${SCRIPT_DIR}/scripts/build-deb.sh"
       deb="$(find_deb || true)"
@@ -192,6 +193,7 @@ EOF
   done
 
   install -m 755 scripts/pistomp-audio-api.py "${INSTALL_DIR}/pistomp-audio-api.py"
+  install -m 755 scripts/jack_vu_meter.py "${INSTALL_DIR}/jack_vu_meter.py"
   install -m 755 scripts/pistomp-wifi-api.py "${INSTALL_DIR}/pistomp-wifi-api.py"
   install -m 755 scripts/pistomp-poweroff.sh "${INSTALL_DIR}/pistomp-poweroff.sh"
   install -m 644 "${PACKAGING}/systemd/pistomp-audio-api.service" \
