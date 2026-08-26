@@ -12,6 +12,10 @@ Environment=JACK_PROMISCUOUS_SERVER=jack
 ExecStart=/usr/bin/python3 /opt/pistomp-mobile/pistomp-audio-api.py
 Restart=on-failure
 RestartSec=2
+# Modest privileges so the VU JACK client can mlock / use RR (same idea as mod-host).
+LimitMEMLOCK=infinity
+LimitRTPRIO=95
+AmbientCapabilities=CAP_SYS_NICE CAP_IPC_LOCK
 
 [Install]
 WantedBy=multi-user.target
