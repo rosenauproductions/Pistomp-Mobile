@@ -89,8 +89,7 @@ input {
 
 .app-shell[data-layout="landscape"] .main > .board-warning,
 .app-shell[data-layout="landscape"] .main > .demo-save-hint,
-.app-shell[data-layout="landscape"] .main > .pedalboard-picker,
-.app-shell[data-layout="landscape"] .main > .vu-strip {
+.app-shell[data-layout="landscape"] .main > .pedalboard-picker {
   grid-column: 1 / -1;
 }
 
@@ -590,25 +589,18 @@ input {
   padding-bottom: calc(1rem + var(--safe-bottom));
 }
 
-/* —— VU meters (main-screen strip) —— */
-.vu-strip {
-  margin: 0 0 0.85rem;
-  padding: 0.55rem 0.45rem 0.4rem;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--panel, #12151a) 88%, #000);
+/* —— VU meters (pedal-sized tiles in the effects grid) —— */
+.vu-tile {
+  /* Match .effect footprint; slightly darker so meters read as hardware. */
+  background: linear-gradient(165deg, #161a20 0%, #0c0e12 100%);
 }
 
-.vu-strip-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.5rem;
-  align-items: end;
-}
-
-.vu-strip-grid--single {
-  grid-template-columns: minmax(0, 16rem);
-  justify-content: center;
+.vu-tile-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
 }
 
 .vu-meter-label {
@@ -626,12 +618,15 @@ input {
   display: flex;
   flex-direction: column;
   align-items: stretch;
+  flex: 1;
   min-width: 0;
+  min-height: 0;
 }
 
 .vu-led-svg {
   width: 100%;
   height: auto;
+  flex: 1;
   display: block;
   background: #050505;
   border-radius: 8px;
@@ -663,10 +658,14 @@ input {
   display: flex;
   flex-direction: column;
   align-items: stretch;
+  flex: 1;
   min-width: 0;
+  min-height: 0;
 }
 
 .vu-needle-frame {
+  flex: 1;
+  min-height: 0;
   aspect-ratio: 1 / 0.82;
   background: #0a0a0a;
   border: 2px solid #1c1c1c;

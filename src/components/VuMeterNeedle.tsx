@@ -2,6 +2,8 @@ interface Props {
   /** Normalized 0–1 level (0 = left/−20, ~0.75 = 0 VU, 1 = +3) */
   level: number;
   label: string;
+  /** When true, label is only used for aria (tile head shows the name). */
+  hideLabel?: boolean;
 }
 
 /** Map 0–1 to needle angle (degrees). Left rest ≈ -48°, 0 VU ≈ 0°, +3 ≈ +48°. */
@@ -13,7 +15,7 @@ function levelToAngle(level: number): number {
 }
 
 /** Square vintage circular needle VU (SVG face, no branding). */
-export function VuMeterNeedle({ level, label }: Props) {
+export function VuMeterNeedle({ level, label, hideLabel = false }: Props) {
   const angle = levelToAngle(level);
   const cx = 100;
   const cy = 118;
@@ -136,7 +138,7 @@ export function VuMeterNeedle({ level, label }: Props) {
           </g>
         </svg>
       </div>
-      <span className="vu-meter-label">{label}</span>
+      {!hideLabel && <span className="vu-meter-label">{label}</span>}
     </div>
   );
 }

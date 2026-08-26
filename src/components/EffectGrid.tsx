@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { effectCardVars } from "../lib/color";
 import type { EffectPlugin } from "../api/types";
 import { StompSwitch } from "./StompSwitch";
@@ -7,11 +7,14 @@ interface Props {
   plugins: EffectPlugin[];
   onToggle: (plugin: EffectPlugin) => void;
   onOpenSettings: (plugin: EffectPlugin) => void;
+  /** Leading grid cells (e.g. VU meter tiles). */
+  leading?: ReactNode;
 }
 
-export function EffectGrid({ plugins, onToggle, onOpenSettings }: Props) {
+export function EffectGrid({ plugins, onToggle, onOpenSettings, leading }: Props) {
   return (
     <div className="grid">
+      {leading}
       {plugins.map((plugin) => {
         const active = !plugin.bypassed;
         const vars = effectCardVars(plugin.color, plugin.uri);

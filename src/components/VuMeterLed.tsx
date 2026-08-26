@@ -2,6 +2,8 @@ interface Props {
   /** Normalized 0–1 level */
   level: number;
   label: string;
+  /** When true, label is only used for aria (tile head shows the name). */
+  hideLabel?: boolean;
 }
 
 const SEGMENTS = 28;
@@ -17,7 +19,7 @@ function segmentColor(i: number): string {
 }
 
 /** Curved LED-bar VU. */
-export function VuMeterLed({ level, label }: Props) {
+export function VuMeterLed({ level, label, hideLabel = false }: Props) {
   const lit = Math.round(Math.min(1, Math.max(0, level)) * SEGMENTS);
   const cx = 100;
   const cy = 108;
@@ -83,7 +85,7 @@ export function VuMeterLed({ level, label }: Props) {
           dB
         </text>
       </svg>
-      <span className="vu-meter-label">{label}</span>
+      {!hideLabel && <span className="vu-meter-label">{label}</span>}
     </div>
   );
 }

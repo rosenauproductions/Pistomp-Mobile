@@ -119,8 +119,6 @@ export default function App() {
         <ConnectionStatusBar line={stomp.connectionStatusLine} broken={stomp.connectionBroken} />
 
         <main className="main">
-          {showVu && <VuMeterStrip style={vuStyle} mode={vuMode} />}
-
           {stomp.mode === "offline" && (
             <div className="board-warning" role="alert">
               <strong>Not connected to MOD.</strong> Tap <em>↻</em> in the header or fix the network
@@ -180,6 +178,9 @@ export default function App() {
               plugins={visiblePlugins}
               onToggle={(p) => void stomp.toggleBypass(p)}
               onOpenSettings={openEffectSettings}
+              leading={
+                showVu ? <VuMeterStrip style={vuStyle} mode={vuMode} /> : null
+              }
             />
           </div>
         </main>
