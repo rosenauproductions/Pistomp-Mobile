@@ -89,7 +89,8 @@ input {
 
 .app-shell[data-layout="landscape"] .main > .board-warning,
 .app-shell[data-layout="landscape"] .main > .demo-save-hint,
-.app-shell[data-layout="landscape"] .main > .pedalboard-picker {
+.app-shell[data-layout="landscape"] .main > .pedalboard-picker,
+.app-shell[data-layout="landscape"] .main > .vu-strip {
   grid-column: 1 / -1;
 }
 
@@ -587,6 +588,166 @@ input {
   flex: 1;
   padding: 1rem;
   padding-bottom: calc(1rem + var(--safe-bottom));
+}
+
+/* —— VU meters (main-screen strip) —— */
+.vu-strip {
+  margin: 0 0 0.85rem;
+  padding: 0.55rem 0.45rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel, #12151a) 88%, #000);
+}
+
+.vu-strip-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  align-items: end;
+}
+
+.vu-meter-label {
+  display: block;
+  text-align: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 0.15rem;
+}
+
+.vu-led {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.vu-led-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: #050505;
+  border-radius: 8px;
+}
+
+.vu-led-tick {
+  stroke: #c8c8c8;
+  stroke-width: 1;
+}
+
+.vu-led-tick-label {
+  fill: #b0b0b0;
+  font-size: 6px;
+  font-family: system-ui, sans-serif;
+}
+
+.vu-led-db {
+  fill: #888;
+  font-size: 9px;
+  font-weight: 600;
+  font-family: system-ui, sans-serif;
+}
+
+.vu-led-seg {
+  transition: fill 0.05s linear;
+}
+
+.vu-needle {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.vu-needle-frame {
+  aspect-ratio: 1 / 0.82;
+  background: #0a0a0a;
+  border: 2px solid #1c1c1c;
+  border-radius: 10px;
+  padding: 0.2rem;
+  box-shadow: inset 0 0 0 1px #333;
+}
+
+.vu-needle-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.vu-needle-face {
+  fill: #efe6c9;
+}
+
+.vu-needle-redzone {
+  stroke: #c62828;
+  stroke-width: 5;
+  stroke-linecap: butt;
+}
+
+.vu-needle-tick {
+  stroke: #1a1a1a;
+  stroke-width: 1.4;
+}
+
+.vu-needle-tick.red {
+  stroke: #c62828;
+}
+
+.vu-needle-num {
+  fill: #1a1a1a;
+  font-size: 7px;
+  font-weight: 700;
+  font-family: system-ui, sans-serif;
+}
+
+.vu-needle-num.red {
+  fill: #c62828;
+}
+
+.vu-needle-pct {
+  fill: #333;
+  font-size: 5.5px;
+  font-family: system-ui, sans-serif;
+}
+
+.vu-needle-sign {
+  fill: #1a1a1a;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.vu-needle-sign.red {
+  fill: #c62828;
+}
+
+.vu-needle-vu {
+  fill: #1a1a1a;
+  font-size: 14px;
+  font-weight: 800;
+  font-family: system-ui, sans-serif;
+  letter-spacing: 0.04em;
+}
+
+.vu-needle-well {
+  fill: #111;
+}
+
+.vu-needle-arm {
+  transition: transform 0.08s ease-out;
+}
+
+.vu-needle-line {
+  stroke: #111;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.vu-needle-hub {
+  fill: #222;
+  stroke: #666;
+  stroke-width: 0.8;
 }
 
 .strip {

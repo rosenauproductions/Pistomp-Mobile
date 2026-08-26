@@ -7,6 +7,7 @@ import { PedalboardSheet } from "./components/PedalboardSheet";
 import { SettingsSheet } from "./components/SettingsSheet";
 import { SnapshotBar, snapshotCount } from "./components/SnapshotBar";
 import { ConnectionStatusBar } from "./components/ConnectionStatusBar";
+import { VuMeterStrip } from "./components/VuMeterStrip";
 import { useStomp } from "./hooks/useStomp";
 import type { EffectPlugin } from "./api/types";
 import {
@@ -19,6 +20,16 @@ import {
   getHideUnassignedMidi,
   setHideUnassignedMidi as persistHideUnassignedMidi,
 } from "./lib/adminPrefs";
+import {
+  getShowVu,
+  getVuMode,
+  getVuStyle,
+  setShowVu as persistShowVu,
+  setVuMode as persistVuMode,
+  setVuStyle as persistVuStyle,
+  type VuMode,
+  type VuStyle,
+} from "./lib/vuPrefs";
 import { pluginHasMidiAssignment } from "./lib/midiAssignment";
 
 export default function App() {
@@ -30,6 +41,9 @@ export default function App() {
     getDisplayRotation(),
   );
   const [hideUnassignedMidi, setHideUnassignedMidiState] = useState(() => getHideUnassignedMidi());
+  const [showVu, setShowVuState] = useState(() => getShowVu());
+  const [vuStyle, setVuStyleState] = useState<VuStyle>(() => getVuStyle());
+  const [vuMode, setVuModeState] = useState<VuMode>(() => getVuMode());
 
   const setDisplayRotation = (rotation: DisplayRotation) => {
     persistDisplayRotation(rotation);
@@ -40,6 +54,21 @@ export default function App() {
   const setHideUnassignedMidi = (hide: boolean) => {
     persistHideUnassignedMidi(hide);
     setHideUnassignedMidiState(hide);
+  };
+
+  const setShowVu = (show: boolean) => {
+    persistShowVu(show);
+    setShowVuState(show);
+  };
+
+  const setVuStyle = (style: VuStyle) => {
+    persistVuStyle(style);
+    setVuStyleState(style);
+  };
+
+  const setVuMode = (mode: VuMode) => {
+    persistVuMode(mode);
+    setVuModeState(mode);
   };
 
   useEffect(() => {
@@ -90,6 +119,8 @@ export default function App() {
         <ConnectionStatusBar line={stomp.connectionStatusLine} broken={stomp.connectionBroken} />
 
         <main className="main">
+          {showVu && <VuMeterStrip style={vuStyle} mode={vuMode} />}
+
           {stomp.mode === "offline" && (
             <div className="board-warning" role="alert">
               <strong>Not connected to MOD.</strong> Tap <em>↻</em> in the header or fix the network
@@ -172,6 +203,12 @@ export default function App() {
           onDisplayRotationChange={setDisplayRotation}
           hideUnassignedMidi={hideUnassignedMidi}
           onHideUnassignedMidiChange={setHideUnassignedMidi}
+          showVu={showVu}
+          onShowVuChange={setShowVu}
+          vuStyle={vuStyle}
+          onVuStyleChange={setVuStyle}
+          vuMode={vuMode}
+          onVuModeChange={setVuMode}
           onRefreshWifi={stomp.refreshWifiStatus}
           onClose={() => setSettingsOpen(false)}
           onSave={stomp.saveHost}

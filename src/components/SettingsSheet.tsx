@@ -8,6 +8,7 @@ import { NetworkHints } from "./NetworkHints";
 import { WifiAdminControls } from "./WifiAdminControls";
 import { getAppVersionLabel } from "../lib/appVersion";
 import type { DisplayRotation } from "../lib/displayRotation";
+import type { VuMode, VuStyle } from "../lib/vuPrefs";
 import {
   isOnPiStompDevice,
   isRuntimeModeToggleVisible,
@@ -29,6 +30,12 @@ interface Props {
   onDisplayRotationChange: (rotation: DisplayRotation) => void;
   hideUnassignedMidi: boolean;
   onHideUnassignedMidiChange: (hide: boolean) => void;
+  showVu: boolean;
+  onShowVuChange: (show: boolean) => void;
+  vuStyle: VuStyle;
+  onVuStyleChange: (style: VuStyle) => void;
+  vuMode: VuMode;
+  onVuModeChange: (mode: VuMode) => void;
   onRefreshWifi: () => Promise<WifiStatus | null>;
   onClose: () => void;
   onSave: (host: string) => void;
@@ -53,6 +60,12 @@ export function SettingsSheet({
   onDisplayRotationChange,
   hideUnassignedMidi,
   onHideUnassignedMidiChange,
+  showVu,
+  onShowVuChange,
+  vuStyle,
+  onVuStyleChange,
+  vuMode,
+  onVuModeChange,
   onRefreshWifi,
   onClose,
   onSave,
@@ -182,6 +195,63 @@ export function SettingsSheet({
             Portrait: normal layout. Landscape: wide layout, no CSS rotate. 90° / −90°: pedals spin
             in their slots only.
           </p>
+        </div>
+
+        <div className="runtime-mode-block">
+          <span className="admin-subsection-label">Meters</span>
+          <label className="admin-toggle-row">
+            <input
+              type="checkbox"
+              checked={showVu}
+              onChange={(e) => onShowVuChange(e.target.checked)}
+            />
+            <span>Show VU meters on main screen</span>
+          </label>
+          {showVu && (
+            <>
+              <div className="display-rotation-toggle" role="group" aria-label="VU style">
+                {(
+                  [
+                    { id: "led" as const, label: "LED" },
+                    { id: "needle" as const, label: "Needle" },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    className={`runtime-mode-btn ${vuStyle === opt.id ? "active" : ""}`}
+                    aria-pressed={vuStyle === opt.id}
+                    onClick={() => onVuStyleChange(opt.id)}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <div className="display-rotation-toggle" role="group" aria-label="VU channels">
+                {(
+                  [
+                    { id: "inputs" as const, label: "Inputs" },
+                    { id: "outputs" as const, label: "Outputs" },
+                    { id: "summed" as const, label: "Summed" },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    className={`runtime-mode-btn ${vuMode === opt.id ? "active" : ""}`}
+                    aria-pressed={vuMode === opt.id}
+                    onClick={() => onVuModeChange(opt.id)}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <p className="runtime-mode-hint">
+                Inputs / Outputs: stereo L+R. Summed: one meter for combined input, one for combined
+                output. Levels are demo until live peaks are wired.
+              </p>
+            </>
+          )}
         </div>
 
         <div className="runtime-mode-block">

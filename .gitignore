@@ -9,3 +9,6 @@ debian/files
 debian/.debhelper/
 debian/pistomp-mobile/
 *.deb
+
+# Local Pi pedalboard dumps (keep out of git)
+pedalboards-backup/
