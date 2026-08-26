@@ -11,44 +11,29 @@ export interface VuLevels {
   outR: number;
 }
 
+const ZERO: VuLevels = { inL: 0, inR: 0, outL: 0, outR: 0 };
+
 function clamp01(n: number): number {
   return Math.min(1, Math.max(0, n));
 }
 
-function demoTick(t: number): VuLevels {
-  return {
-    inL: clamp01(0.35 + 0.45 * Math.abs(Math.sin(t * 2.1)) + 0.12 * Math.sin(t * 11.3)),
-    inR: clamp01(0.32 + 0.48 * Math.abs(Math.sin(t * 2.1 + 0.4)) + 0.1 * Math.sin(t * 9.7)),
-    outL: clamp01(0.28 + 0.5 * Math.abs(Math.sin(t * 1.7 + 0.2)) + 0.15 * Math.sin(t * 7.1)),
-    outR: clamp01(0.3 + 0.47 * Math.abs(Math.sin(t * 1.7 + 0.55)) + 0.12 * Math.sin(t * 8.4)),
-  };
-}
-
 /**
- * Live peaks from `/pistomp/audio/peaks` on Pi-Stomp; demo ballistics elsewhere / if offline.
+ * Live peaks from `/pistomp/audio/peaks` on Pi-Stomp.
+ * Idle (zeros) when not on the Pi or when peaks are unavailable — no demo motion.
  */
 export function useVuLevels(active: boolean): VuLevels {
-  const [levels, setLevels] = useState<VuLevels>({
-    inL: 0,
-    inR: 0,
-    outL: 0,
-    outR: 0,
-  });
+  const [levels, setLevels] = useState<VuLevels>(ZERO);
 
   useEffect(() => {
-    if (!active) {
-      setLevels({ inL: 0, inR: 0, outL: 0, outR: 0 });
+    if (!active || !isPiStompMode()) {
+      setLevels(ZERO);
       return;
     }
 
-    const preferLive = isPiStompMode();
     let cancelled = false;
-    let raf = 0;
     let pollTimer = 0;
     let last = performance.now();
-    const held = { inL: 0, inR: 0, outL: 0, outR: 0 };
-    const t0 = performance.now();
-    let liveOk = false;
+    const held = { ...ZERO };
 
     const applyBallistics = (raw: VuLevels, dt: number) => {
       const attack = 1 - Math.exp(-dt * 28);
@@ -64,11 +49,10 @@ export function useVuLevels(active: boolean): VuLevels {
     const pollLive = async () => {
       const peaks = await fetchVuPeaks();
       if (cancelled) return;
+      const now = performance.now();
+      const dt = Math.min(0.08, (now - last) / 1000);
+      last = now;
       if (peaks?.available) {
-        liveOk = true;
-        const now = performance.now();
-        const dt = Math.min(0.08, (now - last) / 1000);
-        last = now;
         applyBallistics(
           {
             inL: clamp01(peaks.inL),
@@ -79,31 +63,15 @@ export function useVuLevels(active: boolean): VuLevels {
           dt,
         );
       } else {
-        liveOk = false;
+        applyBallistics(ZERO, dt);
       }
     };
 
-    if (preferLive) {
-      void pollLive();
-      pollTimer = window.setInterval(() => void pollLive(), 50);
-    }
-
-    const tick = (now: number) => {
-      if (cancelled) return;
-      // Demo only when not successfully live (desktop / API down)
-      if (!preferLive || !liveOk) {
-        const dt = Math.min(0.05, (now - last) / 1000);
-        last = now;
-        const t = (now - t0) / 1000;
-        applyBallistics(demoTick(t), dt);
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
+    void pollLive();
+    pollTimer = window.setInterval(() => void pollLive(), 50);
 
     return () => {
       cancelled = true;
-      cancelAnimationFrame(raf);
       if (pollTimer) window.clearInterval(pollTimer);
     };
   }, [active]);

@@ -248,8 +248,8 @@ export function SettingsSheet({
                 ))}
               </div>
               <p className="runtime-mode-hint">
-                Inputs / Outputs: stereo L+R. In 1+2 / Out 1+2: one summed meter. On the Pi, meters
-                tap JACK capture / mod-monitor (live). Elsewhere: demo motion.
+                Inputs / Outputs: stereo L+R. In 1+2 / Out 1+2: one summed meter. Live on the Pi
+                (JACK capture / mod-monitor). Idle when not connected.
               </p>
             </>
           )}

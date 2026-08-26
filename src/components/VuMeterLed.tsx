@@ -16,7 +16,7 @@ function segmentColor(i: number): string {
   return "#e83838";
 }
 
-/** Curved LED-bar VU (Phase 1 demo levels). */
+/** Curved LED-bar VU. */
 export function VuMeterLed({ level, label }: Props) {
   const lit = Math.round(Math.min(1, Math.max(0, level)) * SEGMENTS);
   const cx = 100;
