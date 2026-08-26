@@ -1,7 +1,8 @@
 /** VU meter display prefs (main-screen strip). */
 
 export type VuStyle = "led" | "needle";
-export type VuMode = "inputs" | "outputs" | "summed";
+/** Stereo L/R, or one summed meter for input 1+2 / output 1+2. */
+export type VuMode = "inputs" | "outputs" | "sum-in" | "sum-out";
 
 const SHOW_KEY = "pistomp-mobile-show-vu";
 const STYLE_KEY = "pistomp-mobile-vu-style";
@@ -45,11 +46,13 @@ export function setVuStyle(style: VuStyle): void {
 export function getVuMode(): VuMode {
   try {
     const v = localStorage.getItem(MODE_KEY);
-    if (v === "inputs" || v === "outputs" || v === "summed") return v;
+    if (v === "inputs" || v === "outputs" || v === "sum-in" || v === "sum-out") return v;
+    // legacy "summed" (dual Sum In / Sum Out) → input 1+2
+    if (v === "summed") return "sum-in";
   } catch {
     /* private mode */
   }
-  return "summed";
+  return "sum-in";
 }
 
 export function setVuMode(mode: VuMode): void {

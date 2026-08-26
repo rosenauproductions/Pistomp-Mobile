@@ -10,21 +10,18 @@ interface Props {
 
 export function VuMeterStrip({ style, mode }: Props) {
   const levels = useVuLevels(true);
-  const { a, b, labelA, labelB } = levelsForMode(levels, mode);
+  const channels = levelsForMode(levels, mode);
+  const single = channels.length === 1;
 
   return (
     <section className="vu-strip" aria-label="VU meters">
-      <div className="vu-strip-grid">
-        {style === "led" ? (
-          <>
-            <VuMeterLed level={a} label={labelA} />
-            <VuMeterLed level={b} label={labelB} />
-          </>
-        ) : (
-          <>
-            <VuMeterNeedle level={a} label={labelA} />
-            <VuMeterNeedle level={b} label={labelB} />
-          </>
+      <div className={`vu-strip-grid${single ? " vu-strip-grid--single" : ""}`}>
+        {channels.map((ch) =>
+          style === "led" ? (
+            <VuMeterLed key={ch.label} level={ch.level} label={ch.label} />
+          ) : (
+            <VuMeterNeedle key={ch.label} level={ch.level} label={ch.label} />
+          ),
         )}
       </div>
     </section>

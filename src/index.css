@@ -606,6 +606,11 @@ input {
   align-items: end;
 }
 
+.vu-strip-grid--single {
+  grid-template-columns: minmax(0, 16rem);
+  justify-content: center;
+}
+
 .vu-meter-label {
   display: block;
   text-align: center;

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchVuPeaks } from "../api/pistompAudio";
 import { isPiStompMode } from "../lib/runtimeMode";
+import type { VuMode } from "../lib/vuPrefs";
 
 /** Normalized 0–1 peak levels for the four hardware channels. */
 export interface VuLevels {
@@ -110,18 +111,34 @@ export function useVuLevels(active: boolean): VuLevels {
   return levels;
 }
 
-/** Map mode channels to two display values (0–1). */
-export function levelsForMode(
-  levels: VuLevels,
-  mode: "inputs" | "outputs" | "summed",
-): { a: number; b: number; labelA: string; labelB: string } {
+export type VuDisplayChannel = { level: number; label: string };
+
+/** Map mode to one or two display channels (0–1). */
+export function levelsForMode(levels: VuLevels, mode: VuMode): VuDisplayChannel[] {
   if (mode === "inputs") {
-    return { a: levels.inL, b: levels.inR, labelA: "In L", labelB: "In R" };
+    return [
+      { level: levels.inL, label: "In L" },
+      { level: levels.inR, label: "In R" },
+    ];
   }
   if (mode === "outputs") {
-    return { a: levels.outL, b: levels.outR, labelA: "Out L", labelB: "Out R" };
+    return [
+      { level: levels.outL, label: "Out L" },
+      { level: levels.outR, label: "Out R" },
+    ];
   }
-  const sumIn = clamp01(Math.sqrt((levels.inL ** 2 + levels.inR ** 2) / 2));
-  const sumOut = clamp01(Math.sqrt((levels.outL ** 2 + levels.outR ** 2) / 2));
-  return { a: sumIn, b: sumOut, labelA: "Sum In", labelB: "Sum Out" };
+  if (mode === "sum-out") {
+    return [
+      {
+        level: clamp01(Math.sqrt((levels.outL ** 2 + levels.outR ** 2) / 2)),
+        label: "Output 1+2",
+      },
+    ];
+  }
+  return [
+    {
+      level: clamp01(Math.sqrt((levels.inL ** 2 + levels.inR ** 2) / 2)),
+      label: "Input 1+2",
+    },
+  ];
 }

@@ -232,7 +232,8 @@ export function SettingsSheet({
                   [
                     { id: "inputs" as const, label: "Inputs" },
                     { id: "outputs" as const, label: "Outputs" },
-                    { id: "summed" as const, label: "Summed" },
+                    { id: "sum-in" as const, label: "In 1+2" },
+                    { id: "sum-out" as const, label: "Out 1+2" },
                   ] as const
                 ).map((opt) => (
                   <button
@@ -247,8 +248,8 @@ export function SettingsSheet({
                 ))}
               </div>
               <p className="runtime-mode-hint">
-                Inputs / Outputs: stereo L+R. Summed: combined input + combined output. On the Pi,
-                meters tap JACK capture / mod-monitor (live). Elsewhere: demo motion.
+                Inputs / Outputs: stereo L+R. In 1+2 / Out 1+2: one summed meter. On the Pi, meters
+                tap JACK capture / mod-monitor (live). Elsewhere: demo motion.
               </p>
             </>
           )}
