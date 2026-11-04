@@ -61,6 +61,37 @@ package_is_installed() {
   dpkg -s "${APP_NAME}" >/dev/null 2>&1
 }
 
+# Post-install check: page on :PORT plus each proxied backend. Prints a clear OK/FAIL.
+verify_install() {
+  local base="http://127.0.0.1:${PORT}"
+  local code="" i
+  for i in 1 2 3 4 5; do
+    code="$(curl -s -o /dev/null -m 3 -w '%{http_code}' "${base}/" || true)"
+    [[ "${code}" == "200" ]] && break
+    sleep 1
+  done
+  echo ""
+  echo "=== Verify ==="
+  if [[ "${code}" != "200" ]]; then
+    echo "FAIL  ${base}/ (HTTP ${code:-none}) — Pistomp-Mobile is not being served."
+    echo "      Try: sudo rm -f /etc/nginx/sites-enabled/default && sudo nginx -t && sudo systemctl restart nginx"
+    echo "      Logs: sudo journalctl -u nginx -n 30 --no-pager"
+    return 1
+  fi
+  echo "OK    ${base}/  (app)"
+  local name path
+  for pair in "MOD-UI|/pedalboard/current" "audio API|/pistomp/audio/peaks" "wifi API|/pistomp/wifi/status"; do
+    name="${pair%%|*}"; path="${pair#*|}"
+    code="$(curl -s -o /dev/null -m 5 -w '%{http_code}' "${base}${path}" || true)"
+    if [[ "${code}" == "200" ]]; then
+      echo "OK    ${path}  (${name})"
+    else
+      echo "WARN  ${path}  (${name}) HTTP ${code:-none}"
+    fi
+  done
+  return 0
+}
+
 try_deb_install() {
   local deb=""
   deb="$(find_deb || true)"
@@ -92,6 +123,7 @@ try_deb_install() {
   echo "Installing ${deb} via dpkg..."
   if ! command -v nginx >/dev/null 2>&1; then
     echo "Installing nginx (package dependency)..."
+    echo "(nginx may print \"port 80 is already in use\" — expected: MOD-UI owns :80, Pistomp-Mobile uses :${PORT}.)"
     apt-get update -qq
     apt-get install -y nginx
   fi
@@ -218,6 +250,7 @@ EOF
 
   if ! command -v nginx >/dev/null 2>&1; then
     echo "Installing nginx..."
+    echo "(nginx may print \"port 80 is already in use\" — expected: MOD-UI owns :80, Pistomp-Mobile uses :${PORT}.)"
     apt-get update -qq
     apt-get install -y nginx
   fi
@@ -243,12 +276,7 @@ EOF
     systemctl enable nginx 2>/dev/null || true
     systemctl start nginx 2>/dev/null || systemctl restart nginx
     systemctl reload nginx 2>/dev/null || true
-    if curl -sf "http://127.0.0.1:${PORT}/" >/dev/null 2>&1; then
-      echo "Verify OK: http://127.0.0.1:${PORT}/"
-    else
-      echo "WARN: nginx -t passed but :${PORT} is not responding."
-      echo "  Manual fix: sudo rm -f /etc/nginx/sites-enabled/default && sudo systemctl start nginx"
-    fi
+    verify_install || true
   fi
 
   echo ""
@@ -267,6 +295,8 @@ FORCE_FILE_COPY="${PISTOMP_MOBILE_FORCE_FILE_COPY:-0}"
 if [[ "${FORCE_FILE_COPY}" != "1" ]] && try_deb_install; then
   if [[ "${IN_CHROOT}" -eq 1 ]]; then
     echo "Note: reboot after leaving chroot so systemd picks up units."
+  else
+    verify_install || exit 1
   fi
   exit 0
 fi

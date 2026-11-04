@@ -205,15 +205,35 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(data)))
-        self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(data)
 
+    def _same_origin_json_post(self) -> bool:
+        """Only accept POSTs from the Pistomp-Mobile page itself.
+
+        Requiring application/json forces a CORS preflight for any cross-site
+        request, and we no longer answer preflights, so other websites open in
+        the phone's browser can't trigger actions. The Origin check is a second
+        guard (port ignored: nginx forwards Host without it).
+        """
+        ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        if ctype != "application/json":
+            self._json(415, {"ok": False, "error": "Content-Type must be application/json"})
+            return False
+        origin = self.headers.get("Origin")
+        if origin:
+            origin_host = (urlparse(origin).hostname or "").lower()
+            host = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]").lower()
+            if origin_host not in (host, "localhost", "127.0.0.1", "::1"):
+                self._json(403, {"ok": False, "error": "cross-origin request refused"})
+                return False
+        return True
+
     def do_OPTIONS(self):
-        self.send_response(204)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        # Same-origin only: no CORS preflight approval for other sites.
+        self.send_response(405)
+        self.send_header("Allow", "GET, POST")
+        self.send_header("Content-Length", "0")
         self.end_headers()
 
     def do_GET(self):
@@ -277,6 +297,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path.rstrip("/") or "/"
+        if not self._same_origin_json_post():
+            return
         if path != "/value":
             self._json(404, {"error": "not found"})
             return

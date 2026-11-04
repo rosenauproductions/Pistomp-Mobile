@@ -966,21 +966,41 @@ export async function listSnapshots(): Promise<SnapshotsMap> {
   return request<SnapshotsMap>("/snapshot/list");
 }
 
+/** MOD writes the bundle to SD on save; allow longer than routine requests. */
+const SAVE_TIMEOUT_MS = 15000;
+
 export async function savePedalboard(title: string, asNew = false): Promise<boolean> {
   const body = new FormData();
   body.append("title", title);
   body.append("asNew", asNew ? "1" : "0");
-  const res = await fetch(apiUrl("/pedalboard/save"), { method: "POST", body });
-  if (!res.ok) return false;
-  const data = (await res.json()) as { ok?: boolean };
-  return Boolean(data.ok);
+  const data = await request<{ ok?: boolean } | undefined>(
+    "/pedalboard/save",
+    { method: "POST", body },
+    SAVE_TIMEOUT_MS,
+  );
+  return Boolean(data?.ok);
 }
 
 export async function saveSnapshot(): Promise<boolean> {
-  const res = await fetch(apiUrl("/snapshot/save"), { method: "POST" });
-  if (!res.ok) return false;
-  const ok = await res.json();
+  const ok = await request<unknown>("/snapshot/save", { method: "POST" }, SAVE_TIMEOUT_MS);
   return ok === true || ok === "true";
+}
+
+/** Turn a save failure into a message a player can act on. */
+export function describeSaveError(e: unknown): string {
+  if (e instanceof DOMException && e.name === "AbortError") {
+    return "Save timed out — the Pi-Stomp didn't answer. Check it's on and try again.";
+  }
+  if (e instanceof SyntaxError) {
+    return "Save failed — the Pi sent an unexpected reply. Reinstall or update Pistomp-Mobile on the Pi.";
+  }
+  if (e instanceof TypeError) {
+    return "Couldn't reach the Pi-Stomp to save. Check Wi-Fi and try again.";
+  }
+  if (e instanceof Error && /^\d{3}\b/.test(e.message)) {
+    return `Save failed — the Pi answered HTTP ${e.message.slice(0, 3)}.`;
+  }
+  return e instanceof Error && e.message ? `Save failed — ${e.message}` : "Save failed.";
 }
 
 export function getEditablePorts(ports: EffectPlugin["ports"]): EffectPlugin["ports"] {

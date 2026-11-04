@@ -460,10 +460,13 @@ export function useStomp() {
     setError(null);
     try {
       const ok = await modui.savePedalboard(board.title, false);
-      if (!ok) throw new Error("Could not save pedalboard");
+      if (!ok) {
+        setError("MOD-UI didn't confirm the save. Try again, or save from the Pi-Stomp.");
+        return;
+      }
       setDirty(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Save failed");
+      setError(modui.describeSaveError(e));
     } finally {
       setBusy(false);
     }

@@ -100,7 +100,7 @@ install_writable() {
   sudo bash ./install-on-pistomp.sh
   echo ""
   echo "Done. Open http://pistomp.local:8080 from your phone."
-  echo "If :8080 does not load, see DEPLOYMENT.md → Fresh install: nginx installed but :8080 does not respond"
+  echo "Hard-refresh the page if you had it open before."
 }
 
 install_overlayroot() {
