@@ -52,6 +52,8 @@ The repo includes **prebuilt `dist/`**. `~/pi-stomp/` (firmware) and `~/Pistomp-
 
 Default SSH: **`pistomp`** / **`pistomp`**. Phone: **http://pistomp.local:8080** — leave **Host** empty in settings.
 
+**Updated Pi-Stomp OS to 3.3.x?** The update removes Pistomp-Mobile (`:8080` stops loading, Save does nothing). Run the first-install commands above again — see [DEPLOYMENT.md](./DEPLOYMENT.md#after-updating-pi-stomp-os-33x--reinstall-pistomp-mobile).
+
 ### Alternative — build on Mac and SCP
 
 ```bash

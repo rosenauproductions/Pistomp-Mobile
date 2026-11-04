@@ -13,6 +13,31 @@ Same Mac build (`npm run build`) for both. Details: [docs/PI-STOMP-VARIANTS.md](
 
 **v1.0.0+** is verified on **headless acoustic**; **vanilla** uses the same app with the simpler install path above. Headless milestone checklist: [docs/MILESTONE-HEADLESS-ACOUSTIC.md](./docs/MILESTONE-HEADLESS-ACOUSTIC.md).
 
+## After updating Pi-Stomp OS (3.3.x) — reinstall Pistomp-Mobile
+
+Updating Pi-Stomp to **3.3.1** (Debian 13 "trixie") installs a fresh system image. It removes everything Pistomp-Mobile added: the `~/Pistomp-Mobile` checkout, `/opt/pistomp-mobile`, nginx, and the `pistomp-audio-api` / `pistomp-wifi-api` services. MOD-UI on port 80 keeps working, so the Pi looks fine, but:
+
+- **http://pistomp.local:8080** no longer loads, or
+- a phone page that was already open shows errors and **Save does nothing**.
+
+Check on the Pi:
+
+```bash
+ls -d ~/Pistomp-Mobile /opt/pistomp-mobile   # "No such file" = wiped by the update
+systemctl is-active nginx                     # "inactive" = nginx is gone too
+```
+
+Fix: do a [first install](#first-install) again (home Wi‑Fi needed for `git clone`):
+
+```bash
+cd ~
+git clone https://github.com/rosenauproductions/Pistomp-Mobile.git
+cd Pistomp-Mobile
+bash scripts/install-pistomp-mobile.sh --reboot
+```
+
+Then hard-refresh **http://pistomp.local:8080** on your phone. Expect to repeat this after any future Pi-Stomp OS update that reinstalls the system.
+
 ## Easiest install — git on the Pi (recommended)
 
 The repo includes a **prebuilt `dist/`** — no Mac, no Node.js on the Pi. Connect the Pi to **home Wi‑Fi** once for `git clone` (or use Ethernet).
@@ -518,6 +543,7 @@ sudo systemctl reload nginx
 
 ### Save or bypass does nothing
 
+- **Just updated Pi-Stomp OS?** The update may have removed Pistomp-Mobile — see [After updating Pi-Stomp OS](#after-updating-pi-stomp-os-33x--reinstall-pistomp-mobile).
 - Must be **LIVE** mode, not DEMO.
 - In settings (gear), **clear the Host URL** so requests stay on `:8080` (same origin). A host of `http://pistomp.local` (port 80) while the page is on `:8080` will not control MOD correctly.
 - Bypass uses the MOD **WebSocket** (`/websocket`); reinstall or reload nginx after updating so `/reset/` and WebSocket proxy are present.
