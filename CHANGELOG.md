@@ -5,6 +5,7 @@
 - **Install:** Post-install check now runs on the `.deb` path too (the default) and prints OK/FAIL for the app on `:8080`, MOD-UI, and the audio/wifi APIs. Explains nginx's harmless "port 80 is already in use" message.
 - **Save:** Pedalboard/snapshot saves time out after 15s instead of hanging, and failures show an actionable message (timeout, Pi unreachable, unexpected reply, HTTP status).
 - **Security:** `pistomp-audio-api` / `pistomp-wifi-api` no longer send `Access-Control-Allow-Origin: *`, and POSTs must be same-origin JSON — other websites open in the phone's browser can't read the hotspot password or trigger shutdown/reboot/Wi-Fi changes.
+- **ALSA:** `pistomp-audio-api` uses pi-stomp's own audiocard on pistompOS 3.x (finds `/opt/pistomp/pi-stomp`, then `/home/pistomp/pi-stomp`) and now drives its debounced `poll_store()`/`flush_store()` like the LCD does — before this, gain/volume changes from the app were never saved to `asound.state` on 3.3. The amixer fallback stores with `sudo -n` (the file is root-owned). `/pistomp/audio/controls` reports `backend` (`pistomp`/`amixer`), and the installer prints it.
 - **Docs:** Reinstall after a Pi-Stomp OS 3.3.x update (see DEPLOYMENT.md).
 
 ## 1.2.1 (2026-07-29)

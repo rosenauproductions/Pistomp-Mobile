@@ -7,7 +7,7 @@ Wants=jack.service
 Type=simple
 User=pistomp
 Group=pistomp
-Environment=PI_STOMP_HOME=/home/pistomp/pi-stomp
+# PI_STOMP_HOME is auto-detected (/opt/pistomp/pi-stomp, then /home/pistomp/pi-stomp).
 Environment=JACK_PROMISCUOUS_SERVER=jack
 ExecStart=/usr/bin/python3 /opt/pistomp-mobile/pistomp-audio-api.py
 Restart=on-failure

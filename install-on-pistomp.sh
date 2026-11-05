@@ -89,6 +89,12 @@ verify_install() {
       echo "WARN  ${path}  (${name}) HTTP ${code:-none}"
     fi
   done
+  local backend
+  backend="$(curl -s -m 5 "${base}/pistomp/audio/controls" | grep -o '"backend": *"[a-z]*"' | cut -d'"' -f4 || true)"
+  case "${backend}" in
+    pistomp) echo "OK    ALSA via pi-stomp audiocard" ;;
+    amixer)  echo "WARN  ALSA via amixer fallback — see: journalctl -u pistomp-audio-api | grep fallback" ;;
+  esac
   return 0
 }
 

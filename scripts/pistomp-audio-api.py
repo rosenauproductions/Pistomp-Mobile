@@ -5,15 +5,28 @@ from __future__ import annotations
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
+import threading
+import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
 
 HOST = "127.0.0.1"
 PORT = 8766
 CARD = 0
-PI_STOMP_HOME = os.environ.get("PI_STOMP_HOME", "/home/pistomp/pi-stomp")
+# pi-stomp source tree. pistompOS 3.x installs it to /opt/pistomp/pi-stomp
+# (with /home/pistomp/pi-stomp as a symlink); older images had a git checkout
+# in /home/pistomp/pi-stomp. PI_STOMP_HOME overrides.
+_PI_STOMP_CANDIDATES = [
+    os.environ.get("PI_STOMP_HOME") or "",
+    "/opt/pistomp/pi-stomp",
+    "/home/pistomp/pi-stomp",
+]
+PI_STOMP_HOME = next((p for p in _PI_STOMP_CANDIDATES if p and os.path.isdir(p)), "")
+# How often to let pi-stomp's audiocard flush its debounced `alsactl store`.
+STORE_POLL_S = 0.25
 # Same path pi-stomp audiocard.py uses (not a Pistomp-Mobile–specific file).
 ASOUND_STATE = "/var/lib/alsa/asound.state"
 
@@ -41,6 +54,11 @@ DEFAULT_CONTROLS = [
 
 _audiocard = None
 _audiocard_tried = False
+# "pistomp" when pi-stomp's audiocard is driving ALSA, else "amixer".
+_backend = "amixer"
+_backend_detail = "not initialised"
+# Serialises card calls between HTTP requests and the store-poll thread.
+_card_lock = threading.RLock()
 
 
 def _run(cmd: str) -> str:
@@ -48,21 +66,30 @@ def _run(cmd: str) -> str:
 
 
 def _get_audiocard():
-    global _audiocard, _audiocard_tried
-    if _audiocard_tried:
-        return _audiocard
-    _audiocard_tried = True
-    if not os.path.isdir(PI_STOMP_HOME):
-        return None
-    try:
-        sys.path.insert(0, PI_STOMP_HOME)
-        from pistomp.audiocardfactory import Audiocardfactory
+    """pi-stomp's own audiocard (same control names and persistence as the LCD menu)."""
+    global _audiocard, _audiocard_tried, _backend, _backend_detail
+    with _card_lock:
+        if _audiocard_tried:
+            return _audiocard
+        _audiocard_tried = True
+        if not PI_STOMP_HOME:
+            _backend_detail = "pi-stomp not found in " + ", ".join(p for p in _PI_STOMP_CANDIDATES if p)
+            sys.stderr.write(f"pistomp-audio-api: amixer fallback ({_backend_detail})\n")
+            return None
+        try:
+            if PI_STOMP_HOME not in sys.path:
+                sys.path.insert(0, PI_STOMP_HOME)
+            from pistomp.audiocardfactory import Audiocardfactory
 
-        _audiocard = Audiocardfactory(PI_STOMP_HOME).create()
-    except Exception as exc:
-        sys.stderr.write(f"pistomp-audio-api: audiocard fallback ({exc})\n")
-        _audiocard = None
-    return _audiocard
+            _audiocard = Audiocardfactory(PI_STOMP_HOME).create()
+            _backend = "pistomp"
+            _backend_detail = f"{type(_audiocard).__name__} from {PI_STOMP_HOME}"
+            sys.stderr.write(f"pistomp-audio-api: using pi-stomp audiocard {_backend_detail}\n")
+        except Exception as exc:
+            _audiocard = None
+            _backend_detail = f"{type(exc).__name__}: {exc}"
+            sys.stderr.write(f"pistomp-audio-api: amixer fallback ({_backend_detail})\n")
+        return _audiocard
 
 
 def _store_alsa_state() -> None:
@@ -70,18 +97,52 @@ def _store_alsa_state() -> None:
     card = _get_audiocard()
     if card is not None:
         try:
-            card.store()
+            with _card_lock:
+                card.store()
             return
         except Exception:
             pass
     try:
+        # asound.state is root-owned; the service runs as pistomp (passwordless
+        # sudo on pistompOS). -n: never hang on a password prompt.
         subprocess.run(
-            ["/usr/sbin/alsactl", "-f", ASOUND_STATE, "store"],
+            ["sudo", "-n", "/usr/sbin/alsactl", "-f", ASOUND_STATE, "store"],
             stderr=subprocess.DEVNULL,
             check=False,
         )
     except Exception:
         pass
+
+
+def _store_poll_loop() -> None:
+    """Drive pi-stomp's debounced store, like modalapistomp's main loop does.
+
+    pistompOS 3.3+ audiocards only *schedule* `alsactl store` on a set; it runs
+    when poll_store() is called after the settle delay. Older audiocards store
+    immediately and have no poll_store, so this is a no-op there.
+    """
+    while True:
+        time.sleep(STORE_POLL_S)
+        card = _audiocard
+        poll = getattr(card, "poll_store", None)
+        if poll is None:
+            continue
+        try:
+            with _card_lock:
+                poll()
+        except Exception as exc:
+            sys.stderr.write(f"pistomp-audio-api: poll_store failed ({exc})\n")
+
+
+def _flush_pending_store() -> None:
+    flush = getattr(_audiocard, "flush_store", None)
+    if flush is None:
+        return
+    try:
+        with _card_lock:
+            flush()
+    except Exception as exc:
+        sys.stderr.write(f"pistomp-audio-api: flush_store failed ({exc})\n")
 
 
 def _resolve_param_name(name: str) -> str:
@@ -145,8 +206,9 @@ def get_volume_db(name: str) -> dict | None:
     card = _get_audiocard()
     if card is not None and param:
         try:
-            value_db = float(card.get_volume_parameter(param))
-            # pi-stomp returns float dB; approximate min/max for IQaudIO Aux
+            with _card_lock:
+                value_db = float(card.get_volume_parameter(param))
+            # pi-stomp returns float dB; approximate min/max for IQaudIO
             min_db, max_db = -20.0, 12.0
             if param == card.CAPTURE_VOLUME:
                 min_db, max_db = -19.75, 12.0
@@ -162,7 +224,8 @@ def get_volume_db(name: str) -> dict | None:
         return None
     value_db = round(float(cur.group(1)), 2)
     mins = [float(x) for x in re.findall(r"(-?\d+\.\d+)dB", s)]
-    if len(mins) < 2:
+    if len(mins) < 2 or min(mins) >= max(mins):
+        # sget prints current values only; equal channels give no range.
         return {"valueDb": value_db, "minDb": -20.0, "maxDb": 12.0}
     return {"valueDb": value_db, "minDb": min(mins), "maxDb": max(mins)}
 
@@ -172,7 +235,9 @@ def set_volume_db(name: str, value_db: float, store: bool = True) -> bool:
     card = _get_audiocard()
     if card is not None and param:
         try:
-            ok = card.set_volume_parameter(param, value_db, store=store)
+            # store=True schedules a debounced persist; _store_poll_loop runs it.
+            with _card_lock:
+                ok = card.set_volume_parameter(param, value_db, store=store)
             return bool(ok)
         except Exception:
             pass
@@ -239,7 +304,16 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = urlparse(self.path).path.rstrip("/") or "/"
         if path == "/controls":
-            self._json(200, {"card": CARD, "controls": list_controls()})
+            controls = list_controls()
+            self._json(
+                200,
+                {
+                    "card": CARD,
+                    "controls": controls,
+                    "backend": _backend,
+                    "backendDetail": _backend_detail,
+                },
+            )
             return
         if path == "/peaks":
             if get_shared_meter is None:
@@ -332,9 +406,20 @@ def main() -> None:
             get_shared_meter()  # start JACK tap early (non-fatal if JACK down)
         except Exception as exc:
             sys.stderr.write(f"pistomp-audio-api: jack vu start deferred ({exc})\n")
+    _get_audiocard()  # pick the backend at startup so the log says which one
+    threading.Thread(target=_store_poll_loop, name="alsa-store", daemon=True).start()
+
+    def _on_term(_signum, _frame):
+        raise SystemExit(0)
+
+    signal.signal(signal.SIGTERM, _on_term)
     server = HTTPServer((HOST, PORT), Handler)
-    print(f"pistomp-audio-api listening on http://{HOST}:{PORT}", flush=True)
-    server.serve_forever()
+    print(f"pistomp-audio-api listening on http://{HOST}:{PORT} (ALSA via {_backend})", flush=True)
+    try:
+        server.serve_forever()
+    finally:
+        # A pending debounced store must not die with the service.
+        _flush_pending_store()
 
 
 if __name__ == "__main__":
